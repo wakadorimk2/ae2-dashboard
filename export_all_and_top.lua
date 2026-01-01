@@ -2,8 +2,10 @@
 local SNAPSHOT_INTERVAL = 120  -- 全取得(秒)
 local SHOW_TOP = 30            -- 画面に出す件数
 
-local meBridge = peripheral.find("me_bridge")
-if not meBridge then error("ME Bridge not found") end
+local meBridge = peripheral.find("meBridge")
+if not meBridge then
+  error("meBridge not found (Advanced Peripherals)")
+end
 
 local function listAllItems()
   if meBridge.listItems then return meBridge.listItems() end
