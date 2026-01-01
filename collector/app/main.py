@@ -33,9 +33,12 @@ class IngestPayload(BaseModel):
     source: Optional[str] = Field(None, description="拠点名/次元/ワールド名など任意")
     items: List[IngestItem]
 
+@app.get("/")
+def root() -> Dict[str, Any]:
+    return {"ok": True, "name": APP_NAME, "ts": time.time()}
 
-@app.get("/healthz")
-def healthz() -> Dict[str, Any]:
+@app.get("/health")
+def health() -> Dict[str, Any]:
     return {"ok": True, "name": APP_NAME, "ts": time.time()}
 
 
