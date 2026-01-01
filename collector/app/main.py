@@ -8,9 +8,14 @@ from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from google.cloud import storage
+
 APP_NAME = os.getenv("APP_NAME", "ae2-collector")
 LOG_RAW = os.getenv("LOG_RAW", "0") == "1"          # 1にすると受信payloadを丸ごとログ（重いので注意）
 MAX_ITEMS = int(os.getenv("MAX_ITEMS", "200000"))  # 想定より多いときの保険
+GCS_BUCKET = os.getenv("GCS_BUCKET", "")
+GCS_PREFIX = os.getenv("GCS_PREFIX", "raw")  # 保存先のprefix
+
 
 app = FastAPI(title=APP_NAME)
 
@@ -56,6 +61,35 @@ def _variant_key(item: IngestItem) -> str:
     return item.raw_name
 
 
+_storage_client = None
+
+def _get_storage_client():
+    global _storage_client
+    if _storage_client is None:
+        _storage_client = storage.Client()
+    return _storage_client
+
+def save_jsonl_to_gcs(payload_dict: Dict[str, Any]) -> Optional[str]:
+    if not GCS_BUCKET:
+        return None
+
+    # 1リクエスト=1行jsonl（後でまとめたくなったらDataflow/BigQueryで）
+    ts = payload_dict.get("ts") or time.time()
+    # tsがfloatでも安全に
+    ts_int = int(float(ts))
+    day = time.strftime("%Y/%m/%d", time.gmtime(ts_int))
+    fname = f"{ts_int}-{os.urandom(4).hex()}.jsonl"
+    object_name = f"{GCS_PREFIX}/{day}/{fname}"
+
+    line = json.dumps(payload_dict, ensure_ascii=False) + "\n"
+
+    client = _get_storage_client()
+    bucket = client.bucket(GCS_BUCKET)
+    blob = bucket.blob(object_name)
+    blob.upload_from_string(line, content_type="application/jsonl; charset=utf-8")
+    return f"gs://{GCS_BUCKET}/{object_name}"
+
+
 @app.post("/ingest")
 def ingest(payload: IngestPayload) -> Dict[str, Any]:
     if len(payload.items) > MAX_ITEMS:
@@ -64,6 +98,10 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     if LOG_RAW:
         # payloadがデカいとログ費用も増えるのでデバッグ時だけ
         app.logger.info("RAW_PAYLOAD %s", json.dumps(payload.model_dump(), ensure_ascii=False))
+    
+    # GCSに保存
+    dump = payload.model_dump()
+    gcs_path = save_jsonl_to_gcs(dump)
 
     # 集計
     by_norm: Dict[str, Dict[str, Any]] = {}
@@ -110,4 +148,4 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     }
     print(json.dumps({"type": "ingest_summary", **summary}, ensure_ascii=False))
 
-    return {"ok": True, **summary}
+    return {"ok": True, "gcs_path": gcs_path, **summary}
