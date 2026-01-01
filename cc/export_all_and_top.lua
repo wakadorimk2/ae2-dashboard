@@ -1,6 +1,6 @@
 -- export_all_and_top.lua
 local SNAPSHOT_INTERVAL = 120  -- 全取得(秒)
-local SHOW_TOP = 30            -- 画面に出す件数
+local SHOW_TOP = 5            -- 画面に出す件数
 
 local meBridge = peripheral.find("meBridge")
 if not meBridge then
@@ -22,6 +22,38 @@ local function getAmount(it)
   return it.amount or it.count or 0
 end
 
+local INGEST_URL = "https://ae2-collector-tarrh74wta-uw.a.run.app/ingest"
+local SOURCE = "base-main"
+
+local function toIngestItem(it)
+  -- Cloud側は raw_name/amount があれば動く
+  return {
+    raw_name = it.name or it.id or it.fingerprint or "unknown",
+    amount = it.amount or it.count or 0,
+    fingerprint = it.fingerprint, -- あればvariants検知が強くなる
+  }
+end
+
+local function postSnapshot(items)
+  local payload = {
+    ts = os.epoch("utc") / 1000,
+    source = SOURCE,
+    items = {},
+  }
+  for i = 1, #items do
+    payload.items[i] = toIngestItem(items[i])
+  end
+
+  local body = textutils.serializeJSON(payload)
+  local headers = { ["Content-Type"] = "application/json" }
+  local res = http.post(INGEST_URL, body, headers)
+  if not res then return false, "http.post failed (nil)" end
+  local txt = res.readAll()
+  res.close()
+  return true, txt
+end
+
+
 while true do
   local ok, items = pcall(listAllItems)
   term.clear()
@@ -32,6 +64,11 @@ while true do
     sleep(SNAPSHOT_INTERVAL)
   else
     -- ここで全件を保持（外部送信するなら items を使う）
+    local ok2, resp = postSnapshot(items)
+    if not ok2 then
+      print("POST ERR: " .. tostring(resp))
+    end
+
     -- 画面には上位N件だけ出す
     table.sort(items, function(a,b) return getAmount(a) > getAmount(b) end)
 
