@@ -9,7 +9,6 @@ for _, it in pairs(items) do
     f.write(s)
     f.close()
     print("saved: " .. path)
-    shell.run("edit", path)
     break
   end
 end
