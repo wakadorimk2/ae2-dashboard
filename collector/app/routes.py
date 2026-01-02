@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from . import settings
 from .models import IngestPayload
 from .storage_gcs import save_jsonl_to_gcs
-from .summarize import summarize_items
+from .summarize import summarize_items, compute_rankings
 
 router = APIRouter()
 
@@ -29,7 +29,10 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     dump = payload.model_dump()
     gcs_path = save_jsonl_to_gcs(dump)
 
+    ts = payload.ts or time.time()
+
     summary = summarize_items(payload.items)
+    ranks = compute_rankings(payload.items, ts=ts, top_n=10, min_amount_for_top=0)
     resp = {
         "ok": True,
         "gcs_path": gcs_path,
@@ -37,7 +40,17 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
         "source": payload.source,
         "items_len": len(payload.items),
         **summary,
+        **ranks,
     }
+
+    if resp.get("top_amount"):
+        print("TOP_AMOUNT:")
+        for r in resp["top_amount"][:5]:
+            print(f"  {r['raw_name']} {r['amount']}")
+    if resp.get("top_growth_per_min"):
+        print("TOP_GROWTH(/min):")
+        for r in resp["top_growth_per_min"][:5]:
+            print(f"  {r['raw_name']} +{r['growth_per_min']}/min")
 
     print(json.dumps({"type": "ingest_summary", **resp}, ensure_ascii=False))
     return resp
