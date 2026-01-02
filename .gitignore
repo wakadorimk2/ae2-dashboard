@@ -258,3 +258,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+### ComputerCraft related ignores
+# allow ComputerCraft lua libs
+!cc/lib/
+!cc/lib/**
