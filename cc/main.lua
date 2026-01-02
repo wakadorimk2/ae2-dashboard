@@ -7,20 +7,6 @@ local function nowTs()
   return os.epoch("utc") / 1000
 end
 
-local function add_row(out, prefix, row)
-  local name = row.name or row.id or row.raw_name
-  if not name then return end
-  local amt = row.amount or row.count or row.qty or 0
-  if amt == 0 then return end
-
-  local rn = prefix .. ":" .. name
-  table.insert(out, {
-    raw_name = rn,
-    amount = amt,
-    fingerprint = rn, -- fluid/gasはこれでOK
-  })
-end
-
 while true do
   local items = ae2.getItems()
   local out = {}
@@ -31,16 +17,6 @@ while true do
       amount = it.amount or it.count or 0,
       fingerprint = fp.make(it),
     })
-  end
-
-  -- fluids
-  for _, f in pairs(bridge.listFluid()) do
-    add_row(out, "fluid", f)
-  end
-
-  -- gases
-  for _, g in pairs(bridge.listGas()) do
-    add_row(out, "gas", g)
   end
 
   local payload = {
