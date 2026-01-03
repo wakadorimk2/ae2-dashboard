@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple, Optional
 import time
 from .models import IngestItem
+from . import limits
 
 def normalize_key(item: IngestItem) -> str:
     return item.raw_name.strip().lower()
@@ -68,7 +69,7 @@ def _kind_and_name(raw: str) -> Tuple[str, str]:
 def compute_rankings(
     items: List[IngestItem],
     ts: float,
-    top_n: int = 10,
+    top_n: int = limits.RANKING_MAX,
     min_amount_for_top: int = 0,
 ) -> Dict[str, Any]:
     """

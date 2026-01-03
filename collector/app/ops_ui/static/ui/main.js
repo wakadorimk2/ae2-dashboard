@@ -3,7 +3,7 @@
 import { loadDisplayNameDict } from "./i18n.js";
 import { loadIconIndex } from "./icons.js";
 import { render, updateTabs } from "./render.js";
-import { state } from "./state.js";
+import { state, TOP_N } from "./state.js";
 
 /**
  * @param {string} msg
@@ -38,9 +38,7 @@ function renderWithHandlers(data) {
 
 export async function load() {
   setErr("");
-  const topnEl = /** @type {HTMLInputElement} */ (document.getElementById("topn"));
-  const topn = topnEl.value;
-  const url = `/dashboard?top_n=${encodeURIComponent(topn)}`;
+  const url = `/dashboard?top_n=${encodeURIComponent(String(TOP_N))}`;
   let data;
   try {
     const res = await fetch(url, { cache: "no-store" });
@@ -102,11 +100,6 @@ function updateHeatmapToggles() {
     btn.classList.toggle("active", btn.dataset.sort === state.heatmapSort);
   });
 }
-
-document.getElementById("topn").addEventListener("input", (e) => {
-  const target = /** @type {HTMLInputElement} */ (e.target);
-  /** @type {HTMLElement} */ (document.getElementById("topnVal")).textContent = target.value;
-});
 
 document.querySelectorAll(".tab").forEach(btn => {
   btn.addEventListener("click", () => {

@@ -9,6 +9,7 @@
 
 export const BAR_MIN_RATIO = 0.02;
 export const DELTA_UNIT = "per_min";
+export const TOP_N = 200;
 
 /** @type {Record<Kind, string>} */
 export const kindLabel = {

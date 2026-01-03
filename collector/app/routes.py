@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
-from . import settings
+from . import limits, settings
 from .models import IngestPayload
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
 from .summarize import summarize_items, compute_rankings
@@ -42,14 +42,17 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     ts = payload.ts or time.time()
 
     summary = summarize_items(payload.items)
-    ranks = compute_rankings(payload.items, ts=ts, top_n=20, min_amount_for_top=0)
+    rank_items = payload.items
+    if len(rank_items) > limits.INGEST_MAX:
+        rank_items = rank_items[:limits.INGEST_MAX]
+    ranks = compute_rankings(rank_items, ts=ts, top_n=limits.RANKING_MAX, min_amount_for_top=0)
     resp = {
         "ok": True,
         "gcs_path": gcs_path,
         "ts": ts,
         "source": payload.source,
         "items_len": len(payload.items),
-        "top_n": 20,
+        "top_n": limits.RANKING_MAX,
         **summary,
         **ranks,
     }
@@ -73,7 +76,7 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     return resp
 
 @router.get("/dashboard")
-def dashboard(top_n: int = Query(10, ge=5, le=20)) -> Dict[str, Any]:
+def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
     if not settings.GCS_BUCKET:
         raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
 
@@ -90,6 +93,8 @@ def dashboard(top_n: int = Query(10, ge=5, le=20)) -> Dict[str, Any]:
             status_code=404,
             detail=f"latest dashboard not found: gs://{settings.GCS_BUCKET}/{object_name}",
         )
+
+    top_n = min(top_n, limits.API_MAX)
 
     top = data.get("top")
     if isinstance(top, dict):

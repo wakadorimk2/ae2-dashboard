@@ -171,7 +171,9 @@ function selectHeatmapEntries(list) {
     const bScore = sortMode === "delta" ? Math.abs(b.delta) : b.amount;
     return bScore - aScore;
   });
-  return entries.slice(0, Math.max(1, state.heatmapCount));
+  const maxCount = Math.max(1, state.heatmapCount);
+  const count = Math.min(maxCount, entries.length);
+  return entries.slice(0, count);
 }
 
 /**
