@@ -14,7 +14,7 @@ end)
 -- monitor right を前提に実行
 local function runMain()
   print("starting main.lua...")
-  shell.run("monitor", "right", "run", "cc/main.lua")
+  shell.run("monitor", "right", "cc/main.lua")
 end
 
 -- 自動復帰ループ（暴走防止つき）
