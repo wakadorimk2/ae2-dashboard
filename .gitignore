@@ -263,3 +263,6 @@ __marimo__/
 # allow ComputerCraft lua libs
 !cc/lib/
 !cc/lib/**
+
+# extracted mod icons
+collector/app/ops_ui/static/icons/
