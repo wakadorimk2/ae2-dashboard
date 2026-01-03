@@ -32,7 +32,7 @@ end
 function M.postEntriesChunked(url, entries, opts)
   opts = opts or {}
   local chunk_size = opts.chunk_size or 300
-  local sleep_sec = opts.sleep_sec or 0.05
+  local sleep_sec = opts.sleep_sec or 0.3
   local job_id = opts.job_id or (tostring(os.epoch("utc")) .. "-" .. tostring(math.random(100000, 999999)))
 
   local parts = chunked(entries, chunk_size)

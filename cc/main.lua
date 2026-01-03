@@ -53,7 +53,13 @@ while true do
 
   print("checkURL:", http.checkURL(cfg.INGEST_URL))
 
-  local ok, job_or_err = post.postEntriesChunked(INGEST_URL, entries, {
+  pcall(function() -- POST前に軽く叩いてインスタンス起こす
+    local h = http.get(cfg.INGEST_URL)
+    if h then h.close() end
+  end)
+  sleep(0.5)
+
+  local ok, job_or_err = post.postEntriesChunked(cfg.INGEST_URL, entries, {
     chunk_size = 300,
     on_start = function(job, total, chunk)
       print(("job_id=%s parts=%d chunk=%d"):format(job, total, chunk))
@@ -69,7 +75,6 @@ while true do
   if not ok then
     print("FAILED:", job_or_err)
   end
-
 
   sleep(cfg.INTERVAL_SEC)
 end
