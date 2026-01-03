@@ -3,6 +3,10 @@ let viewMode = "list";
 let formatMode = "compact";
 let lastData = null;
 let timer = null;
+let lastDeltaNormalizers = null;
+
+const BAR_MIN_RATIO = 0.02;
+const DELTA_UNIT = "per_min";
 
 const kindLabel = {
   item: "Items",
@@ -184,14 +188,56 @@ function scaleValue(n){
   return n * scale;
 }
 
-function tableFor(list, valueKey, metricClass, arrow, isRate){
+function applyMinRatio01(n01, minRatio){
+  const utils = window.ScaleUtils;
+  if (utils && typeof utils.applyMinRatio01 === "function"){
+    return utils.applyMinRatio01(n01, minRatio);
+  }
+  const v = typeof n01 === "number" && Number.isFinite(n01) ? n01 : 0;
+  const r = typeof minRatio === "number" && Number.isFinite(minRatio) ? minRatio : 0;
+  const clamped = Math.max(0, Math.min(1, v));
+  const ratio = Math.max(0, Math.min(1, r));
+  if (ratio <= 0) return clamped;
+  return ratio + (1 - ratio) * clamped;
+}
+
+function toPerMinute(value, unit){
+  const utils = window.ScaleUtils;
+  if (utils && typeof utils.toPerMinute === "function"){
+    return utils.toPerMinute(value, unit);
+  }
+  return value;
+}
+
+function buildListNormalizer(values, method){
+  const utils = window.ScaleUtils;
+  if (utils && typeof utils.buildNormalizer === "function"){
+    return utils.buildNormalizer(values, method);
+  }
+  let max = 0;
+  for (const v of values){
+    if (typeof v === "number" && Number.isFinite(v) && v > max) max = v;
+  }
+  if (max <= 0) return () => 0;
+  return (x) => {
+    if (typeof x !== "number" || !Number.isFinite(x) || x <= 0) return 0;
+    const t = x / max;
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    return t;
+  };
+}
+
+function tableFor(list, valueKey, metricClass, arrow, isRate, compressMethod){
   if (!Array.isArray(list) || list.length === 0) return `<div class="muted">（データなし）</div>`;
 
   const perHour = document.getElementById("perHour")?.checked;
-  const scale = isRate && perHour ? 60 : 1;
+  const displayScale = isRate && perHour ? 60 : 1;
 
-  const values = list.map(x => (x && typeof x[valueKey] === "number") ? x[valueKey] * scale : 0);
-  const max = Math.max(...values, 1);
+  const baseValues = list.map(x => (x && typeof x[valueKey] === "number") ? x[valueKey] : 0);
+  const displayValues = baseValues.map(v => v * displayScale);
+  const method = compressMethod === "sqrt" ? "sqrt" : "log1p";
+  const normalizer = buildListNormalizer(baseValues, method);
   const unit = unitFor(activeKind);
 
   const rows = list.map((x, i) => {
@@ -203,8 +249,11 @@ function tableFor(list, valueKey, metricClass, arrow, isRate){
     const badgeHtml = badge ? ` <span class="kind-badge">${badge}</span>` : "";
     const iconUrl = getIconUrl(raw);
     const iconHtml = iconUrl ? `<img class="item-icon" src="${iconUrl}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : "";
-    const v = values[i] ?? 0;
-    const pct = Math.max(0, Math.min(100, (v / max) * 100));
+    const baseVal = baseValues[i] ?? 0;
+    const v = displayValues[i] ?? 0;
+    const n01 = normalizer(baseVal);
+    const pct01 = baseVal > 0 ? applyMinRatio01(n01, BAR_MIN_RATIO) : 0;
+    const pct = Math.max(0, Math.min(100, pct01 * 100));
     const display = formatValue(v);
     const rawTitle = fmtRaw(v);
     const arrowSpan = arrow ? `<span class="arrow">${arrow}</span>` : "";
@@ -358,6 +407,23 @@ function flattenTop(data){
   return out;
 }
 
+function buildDeltaNormalizersByKind(data){
+  const utils = window.ScaleUtils;
+  if (!utils || typeof utils.buildDeltaNormalizer !== "function") return null;
+  const flat = flattenTop(data);
+  const out = { item: null, fluid: null, gas: null };
+  const opts = { kStrategy: "p95", percentile: 0.95 };
+  for (const kind of Object.keys(out)){
+    const deltas = flat[kind].map(x => {
+      const growth = typeof x.growth === "number" ? x.growth : 0;
+      const decrease = typeof x.decrease === "number" ? x.decrease : 0;
+      return toPerMinute(growth - decrease, DELTA_UNIT);
+    });
+    out[kind] = utils.buildDeltaNormalizer(deltas, opts);
+  }
+  return out;
+}
+
 function renderHeatmap(data){
   const heatmap = document.getElementById("viewHeatmap");
   const flat = flattenTop(data);
@@ -370,14 +436,15 @@ function render(data){
   renderMeta(data);
   renderSummary(data);
   updateUnitLabels();
+  lastDeltaNormalizers = buildDeltaNormalizersByKind(data);
 
   const amount = topList(data, "amount", activeKind);
   const growth = topList(data, "growth_per_min", activeKind);
   const decrease = topList(data, "decrease_per_min", activeKind);
 
-  document.getElementById("amount").innerHTML = tableFor(amount, "amount", "amount", "", false);
-  document.getElementById("growth").innerHTML = tableFor(growth, "growth_per_min", "growth", "↑", true);
-  document.getElementById("decrease").innerHTML = tableFor(decrease, "decrease_per_min", "decrease", "↓", true);
+  document.getElementById("amount").innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
+  document.getElementById("growth").innerHTML = tableFor(growth, "growth_per_min", "growth", "↑", true, "log1p");
+  document.getElementById("decrease").innerHTML = tableFor(decrease, "decrease_per_min", "decrease", "↓", true, "log1p");
 
   renderHeatmap(data);
 }
