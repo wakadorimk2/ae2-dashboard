@@ -62,7 +62,27 @@
 
     <div id="viewHeatmap" class="card" style="display:none;">
       <h2>Heatmap</h2>
-      <div class="muted">Coming soon.</div>
+
+      <div class="tabs heatmap-tabs">
+        <button class="tab active" data-kind="item">Items</button>
+        <button class="tab" data-kind="fluid">Fluids</button>
+        <button class="tab" data-kind="gas">Gases</button>
+      </div>
+
+      <div class="heatmap-toolbar">
+        <div class="segmented" id="heatmapCountToggle">
+          <button class="seg-btn" data-count="40">40</button>
+          <button class="seg-btn active" data-count="80">80</button>
+          <button class="seg-btn" data-count="120">120</button>
+        </div>
+        <div class="segmented" id="heatmapSortToggle">
+          <button class="seg-btn active" data-sort="amount">Amount</button>
+          <button class="seg-btn" data-sort="delta">|Delta|</button>
+        </div>
+      </div>
+
+      <div id="heatmapCanvas" class="heatmap-canvas"></div>
+      <div class="muted heatmap-empty" id="heatmapEmpty">No data.</div>
     </div>
   </div>
 

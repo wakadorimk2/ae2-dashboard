@@ -79,6 +79,7 @@ export function setView(mode) {
   });
   /** @type {HTMLElement} */ (document.getElementById("viewList")).style.display = state.viewMode === "list" ? "block" : "none";
   /** @type {HTMLElement} */ (document.getElementById("viewHeatmap")).style.display = state.viewMode === "heatmap" ? "block" : "none";
+  renderWithHandlers(state.lastData);
 }
 
 /**
@@ -90,6 +91,16 @@ export function setFormat(mode) {
     btn.classList.toggle("active", btn.dataset.format === state.formatMode);
   });
   renderWithHandlers(state.lastData);
+}
+
+function updateHeatmapToggles() {
+  document.querySelectorAll("#heatmapCountToggle .seg-btn").forEach(btn => {
+    const count = Number(btn.dataset.count);
+    btn.classList.toggle("active", count === state.heatmapCount);
+  });
+  document.querySelectorAll("#heatmapSortToggle .seg-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.sort === state.heatmapSort);
+  });
 }
 
 document.getElementById("topn").addEventListener("input", (e) => {
@@ -127,8 +138,29 @@ document.querySelectorAll("#formatToggle .seg-btn").forEach(btn => {
   });
 });
 
+document.querySelectorAll("#heatmapCountToggle .seg-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const count = Number(btn.dataset.count);
+    if (!Number.isFinite(count) || !count) return;
+    state.heatmapCount = count;
+    updateHeatmapToggles();
+    renderWithHandlers(state.lastData);
+  });
+});
+
+document.querySelectorAll("#heatmapSortToggle .seg-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const sort = /** @type {import("./state.js").HeatmapSort} */ (btn.dataset.sort);
+    if (!sort) return;
+    state.heatmapSort = sort;
+    updateHeatmapToggles();
+    renderWithHandlers(state.lastData);
+  });
+});
+
 setView("list");
 setFormat("compact");
+updateHeatmapToggles();
 loadDisplayNameDict().then(() => {
   if (state.lastData) renderWithHandlers(state.lastData);
 });

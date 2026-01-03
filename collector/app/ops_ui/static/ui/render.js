@@ -3,6 +3,7 @@
 import { getDisplayName, normalizeResourceId } from "./i18n.js";
 import { getIconUrl } from "./icons.js";
 import { fmtRaw, formatValue, prettyName, scaleValue, unitFor } from "./format.js";
+import { renderHeatmap } from "./heatmap.js";
 import { applyMinRatio01, buildListNormalizer, toPerMinute } from "./scale_bridge.js";
 import { BAR_MIN_RATIO, DELTA_UNIT, kindLabel, state } from "./state.js";
 
@@ -223,13 +224,12 @@ export function flattenTop(data) {
 }
 
 /**
- * @param {DashboardData} data
+ * @param {{ item: Array<{ growth: number, decrease: number }>, fluid: Array<{ growth: number, decrease: number }>, gas: Array<{ growth: number, decrease: number }> }} flat
  * @returns {{ item: unknown, fluid: unknown, gas: unknown } | null}
  */
-export function buildDeltaNormalizersByKind(data) {
+export function buildDeltaNormalizersByKind(flat) {
   const utils = window.ScaleUtils;
   if (!utils || typeof utils.buildDeltaNormalizer !== "function") return null;
-  const flat = flattenTop(data);
   const out = { item: null, fluid: null, gas: null };
   const opts = { kStrategy: "p95", percentile: 0.95 };
   for (const kind of Object.keys(out)) {
@@ -245,17 +245,6 @@ export function buildDeltaNormalizersByKind(data) {
 
 /**
  * @param {DashboardData} data
- */
-export function renderHeatmap(data) {
-  const heatmap = /** @type {HTMLElement} */ (document.getElementById("viewHeatmap"));
-  const flat = flattenTop(data);
-  const total = Object.values(flat).reduce((acc, list) => acc + list.length, 0);
-  const muted = heatmap.querySelector(".muted");
-  if (muted) muted.textContent = `Coming soon. (${total} nodes prepared)`;
-}
-
-/**
- * @param {DashboardData} data
  * @param {{ onKindSelect?: (kind: import("./state.js").Kind) => void }} [opts]
  */
 export function render(data, opts = {}) {
@@ -263,15 +252,19 @@ export function render(data, opts = {}) {
   renderMeta(data);
   renderSummary(data, opts.onKindSelect);
   updateUnitLabels();
-  state.lastDeltaNormalizers = buildDeltaNormalizersByKind(data);
+  const flat = flattenTop(data);
+  state.lastDeltaNormalizers = buildDeltaNormalizersByKind(flat);
 
-  const amount = topList(data, "amount", state.activeKind);
-  const growth = topList(data, "growth_per_min", state.activeKind);
-  const decrease = topList(data, "decrease_per_min", state.activeKind);
+  if (state.viewMode === "list") {
+    const amount = topList(data, "amount", state.activeKind);
+    const growth = topList(data, "growth_per_min", state.activeKind);
+    const decrease = topList(data, "decrease_per_min", state.activeKind);
 
-  /** @type {HTMLElement} */ (document.getElementById("amount")).innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
-  /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth_per_min", "growth", "↑", true, "log1p");
-  /** @type {HTMLElement} */ (document.getElementById("decrease")).innerHTML = tableFor(decrease, "decrease_per_min", "decrease", "↓", true, "log1p");
+    /** @type {HTMLElement} */ (document.getElementById("amount")).innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
+    /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth_per_min", "growth", "↑", true, "log1p");
+    /** @type {HTMLElement} */ (document.getElementById("decrease")).innerHTML = tableFor(decrease, "decrease_per_min", "decrease", "↓", true, "log1p");
+    return;
+  }
 
-  renderHeatmap(data);
+  renderHeatmap(flat);
 }
