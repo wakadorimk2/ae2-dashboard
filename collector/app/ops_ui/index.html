@@ -9,12 +9,17 @@
 <body>
   <header>
     <div class="title">AE2 Dashboard</div>
-    <span class="pill" id="meta">loading…</span>
+    <span class="pill meta" id="meta">loading…</span>
     <div class="right">
-        <label class="pill" style="display:flex; gap:8px; align-items:center;">
-        <input id="auto" type="checkbox" />
-        <span>Auto</span>
-        </label>
+        <div class="segmented" id="viewToggle">
+          <button class="seg-btn active" data-view="list">List</button>
+          <button class="seg-btn" data-view="heatmap">Heatmap</button>
+        </div>
+
+        <div class="segmented" id="formatToggle">
+          <button class="seg-btn" data-format="raw">Raw</button>
+          <button class="seg-btn active" data-format="compact">Compact</button>
+        </div>
 
         <label class="pill" style="display:flex; gap:8px; align-items:center;">
         <input id="perHour" type="checkbox" />
@@ -24,32 +29,40 @@
         <span class="muted">TopN</span>
         <input id="topn" type="range" min="5" max="20" step="1" value="10" />
         <span class="pill" id="topnVal">10</span>
-        <button id="refresh">更新</button>
     </div>
   </header>
 
   <div class="wrap">
     <div id="err" class="err" style="display:none;"></div>
 
-    <div class="tabs">
-      <button class="tab active" data-kind="item">Items</button>
-      <button class="tab" data-kind="fluid">Fluids</button>
-      <button class="tab" data-kind="gas">Gases</button>
+    <div id="summary" class="summary-grid"></div>
+
+    <div id="viewList">
+      <div class="tabs">
+        <button class="tab active" data-kind="item">Items</button>
+        <button class="tab" data-kind="fluid">Fluids</button>
+        <button class="tab" data-kind="gas">Gases</button>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Amount <span class="unit" id="unit-amount"></span></h2>
+          <div id="amount"></div>
+        </div>
+        <div class="card">
+          <h2>Growth (/min) <span class="unit" id="unit-growth"></span></h2>
+          <div id="growth"></div>
+        </div>
+        <div class="card">
+          <h2>Decrease (/min) <span class="unit" id="unit-decrease"></span></h2>
+          <div id="decrease"></div>
+        </div>
+      </div>
     </div>
 
-    <div class="grid">
-      <div class="card">
-        <h2>Amount</h2>
-        <div id="amount"></div>
-      </div>
-      <div class="card">
-        <h2>Growth (/min)</h2>
-        <div id="growth"></div>
-      </div>
-      <div class="card">
-        <h2>Decrease (/min)</h2>
-        <div id="decrease"></div>
-      </div>
+    <div id="viewHeatmap" class="card" style="display:none;">
+      <h2>Heatmap</h2>
+      <div class="muted">Coming soon.</div>
     </div>
   </div>
 
