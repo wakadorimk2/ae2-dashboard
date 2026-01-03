@@ -87,7 +87,20 @@ def dashboard(top_n: int = Query(10, ge=5, le=20)) -> Dict[str, Any]:
             detail=f"latest dashboard not found: gs://{settings.GCS_BUCKET}/{object_name}",
         )
 
-    for key in ("top_amount", "top_growth_per_min", "top_decrease_per_min"):
+    top = data.get("top")
+    if isinstance(top, dict):
+        for metric in top.values():
+            if not isinstance(metric, dict):
+                continue
+            for kind, items in metric.items():
+                if isinstance(items, list):
+                    metric[kind] = items[:top_n]
+
+    for key in (
+    "top_amount_items","top_amount_fluids","top_amount_gases",
+    "top_growth_per_min_items","top_growth_per_min_fluids","top_growth_per_min_gases",
+    "top_decrease_per_min_items","top_decrease_per_min_fluids","top_decrease_per_min_gases",
+    ):
         if isinstance(data.get(key), list):
             data[key] = data[key][:top_n]
 

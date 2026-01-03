@@ -58,6 +58,13 @@ _prev_ts: Optional[float] = None
 def _key_raw_fp(it: IngestItem) -> Tuple[str, str]:
     return (it.raw_name, it.fingerprint or "")
 
+def _kind_and_name(raw: str) -> Tuple[str, str]:
+    if raw.startswith("fluid:"):
+        return "fluid", raw[len("fluid:") :]
+    if raw.startswith("gas:"):
+        return "gas", raw[len("gas:") :]
+    return "item", raw
+
 def compute_rankings(
     items: List[IngestItem],
     ts: float,
@@ -91,9 +98,46 @@ def compute_rankings(
     )[:top_n]
     top_amount_fmt = [{"raw_name": raw, "amount": amt} for raw, amt in top_amount]
 
+    top_amount_items: List[Tuple[str, int]] = []
+    top_amount_fluids: List[Tuple[str, int]] = []
+    top_amount_gases: List[Tuple[str, int]] = []
+    for raw, amt in cur_by_raw.items():
+        if amt < min_amount_for_top:
+            continue
+        kind, _name = _kind_and_name(raw)
+        if kind == "fluid":
+            top_amount_fluids.append((raw, amt))
+        elif kind == "gas":
+            top_amount_gases.append((raw, amt))
+        else:
+            top_amount_items.append((raw, amt))
+
+    top_amount_items.sort(key=lambda x: x[1], reverse=True)
+    top_amount_fluids.sort(key=lambda x: x[1], reverse=True)
+    top_amount_gases.sort(key=lambda x: x[1], reverse=True)
+
+    top_amount_items_fmt = [
+        {"raw_name": raw, "amount": amt, "kind": "item", "display_name": _kind_and_name(raw)[1]}
+        for raw, amt in top_amount_items[:top_n]
+    ]
+    top_amount_fluids_fmt = [
+        {"raw_name": raw, "amount": amt, "kind": "fluid", "display_name": _kind_and_name(raw)[1]}
+        for raw, amt in top_amount_fluids[:top_n]
+    ]
+    top_amount_gases_fmt = [
+        {"raw_name": raw, "amount": amt, "kind": "gas", "display_name": _kind_and_name(raw)[1]}
+        for raw, amt in top_amount_gases[:top_n]
+    ]
+
     # 増加 Top（/min）
     top_growth_fmt: List[Dict[str, Any]] = []
     top_decrease_fmt: List[Dict[str, Any]] = []
+    top_growth_items_fmt: List[Dict[str, Any]] = []
+    top_growth_fluids_fmt: List[Dict[str, Any]] = []
+    top_growth_gases_fmt: List[Dict[str, Any]] = []
+    top_decrease_items_fmt: List[Dict[str, Any]] = []
+    top_decrease_fluids_fmt: List[Dict[str, Any]] = []
+    top_decrease_gases_fmt: List[Dict[str, Any]] = []
     if _prev_ts is not None:
         dt_min = max(ts - _prev_ts, 1.0) / 60.0
 
@@ -102,8 +146,8 @@ def compute_rankings(
         for (raw, _fp), amt in _prev_amounts.items():
             prev_by_raw[raw] = prev_by_raw.get(raw, 0) + amt
 
-        growth = []
-        decrease = []
+        growth: List[Tuple[str, int]] = []
+        decrease: List[Tuple[str, int]] = []
         all_raws = set(cur_by_raw.keys()) | set(prev_by_raw.keys())
         for raw in all_raws:
             amt = cur_by_raw.get(raw, 0)
@@ -119,6 +163,62 @@ def compute_rankings(
         decrease.sort(key=lambda x: x[1], reverse=True)
         top_decrease_fmt = [{"raw_name": raw, "decrease_per_min": g} for raw, g in decrease[:top_n]]
 
+        growth_items: List[Tuple[str, int]] = []
+        growth_fluids: List[Tuple[str, int]] = []
+        growth_gases: List[Tuple[str, int]] = []
+        for raw, g in growth:
+            kind, _name = _kind_and_name(raw)
+            if kind == "fluid":
+                growth_fluids.append((raw, g))
+            elif kind == "gas":
+                growth_gases.append((raw, g))
+            else:
+                growth_items.append((raw, g))
+
+        decrease_items: List[Tuple[str, int]] = []
+        decrease_fluids: List[Tuple[str, int]] = []
+        decrease_gases: List[Tuple[str, int]] = []
+        for raw, g in decrease:
+            kind, _name = _kind_and_name(raw)
+            if kind == "fluid":
+                decrease_fluids.append((raw, g))
+            elif kind == "gas":
+                decrease_gases.append((raw, g))
+            else:
+                decrease_items.append((raw, g))
+
+        growth_items.sort(key=lambda x: x[1], reverse=True)
+        growth_fluids.sort(key=lambda x: x[1], reverse=True)
+        growth_gases.sort(key=lambda x: x[1], reverse=True)
+        decrease_items.sort(key=lambda x: x[1], reverse=True)
+        decrease_fluids.sort(key=lambda x: x[1], reverse=True)
+        decrease_gases.sort(key=lambda x: x[1], reverse=True)
+
+        top_growth_items_fmt = [
+            {"raw_name": raw, "growth_per_min": g, "kind": "item", "display_name": _kind_and_name(raw)[1]}
+            for raw, g in growth_items[:top_n]
+        ]
+        top_growth_fluids_fmt = [
+            {"raw_name": raw, "growth_per_min": g, "kind": "fluid", "display_name": _kind_and_name(raw)[1]}
+            for raw, g in growth_fluids[:top_n]
+        ]
+        top_growth_gases_fmt = [
+            {"raw_name": raw, "growth_per_min": g, "kind": "gas", "display_name": _kind_and_name(raw)[1]}
+            for raw, g in growth_gases[:top_n]
+        ]
+        top_decrease_items_fmt = [
+            {"raw_name": raw, "decrease_per_min": g, "kind": "item", "display_name": _kind_and_name(raw)[1]}
+            for raw, g in decrease_items[:top_n]
+        ]
+        top_decrease_fluids_fmt = [
+            {"raw_name": raw, "decrease_per_min": g, "kind": "fluid", "display_name": _kind_and_name(raw)[1]}
+            for raw, g in decrease_fluids[:top_n]
+        ]
+        top_decrease_gases_fmt = [
+            {"raw_name": raw, "decrease_per_min": g, "kind": "gas", "display_name": _kind_and_name(raw)[1]}
+            for raw, g in decrease_gases[:top_n]
+        ]
+
     # 状態更新
     _prev_amounts = cur
     _prev_ts = ts
@@ -127,4 +227,30 @@ def compute_rankings(
         "top_amount": top_amount_fmt,
         "top_growth_per_min": top_growth_fmt,
         "top_decrease_per_min": top_decrease_fmt,
+        "top": {
+            "amount": {
+                "item": top_amount_items_fmt,
+                "fluid": top_amount_fluids_fmt,
+                "gas": top_amount_gases_fmt,
+            },
+            "growth_per_min": {
+                "item": top_growth_items_fmt,
+                "fluid": top_growth_fluids_fmt,
+                "gas": top_growth_gases_fmt,
+            },
+            "decrease_per_min": {
+                "item": top_decrease_items_fmt,
+                "fluid": top_decrease_fluids_fmt,
+                "gas": top_decrease_gases_fmt,
+            },
+        },
+        "top_amount_items": top_amount_items_fmt,
+        "top_amount_fluids": top_amount_fluids_fmt,
+        "top_amount_gases": top_amount_gases_fmt,
+        "top_growth_per_min_items": top_growth_items_fmt,
+        "top_growth_per_min_fluids": top_growth_fluids_fmt,
+        "top_growth_per_min_gases": top_growth_gases_fmt,
+        "top_decrease_per_min_items": top_decrease_items_fmt,
+        "top_decrease_per_min_fluids": top_decrease_fluids_fmt,
+        "top_decrease_per_min_gases": top_decrease_gases_fmt,
     }
