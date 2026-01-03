@@ -51,8 +51,13 @@ while true do
     #items, #fluids, #gases, #items + #fluids + #gases
   ))
 
-  local ok, resp = post.postJSON(cfg.INGEST_URL, payload)
-  print(ok and "POST OK" or "POST NG", resp or "")
+  print("checkURL:", http.checkURL(cfg.INGEST_URL))
+  local ok, txt, code = post.postJSON(cfg.INGEST_URL, payload)
+  if not ok then
+    print(txt)
+  else
+    print("POST OK", code or "", txt:sub(1, 200))
+  end
 
   sleep(cfg.INTERVAL_SEC)
 end
