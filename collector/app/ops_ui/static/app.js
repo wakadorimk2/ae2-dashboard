@@ -16,6 +16,73 @@ const kindUnit = {
   gas: "mB",
 };
 
+let displayNameDict = {};
+let displayNameLang = "ja";
+
+function normalizeResourceId(id){
+  if (typeof id !== "string") return { normalized: id, kind: undefined };
+  const parts = id.split(":");
+  if (parts.length >= 3 && (parts[0] === "fluid" || parts[0] === "gas")){
+    return { normalized: parts.slice(1).join(":"), kind: parts[0] };
+  }
+  return { normalized: id, kind: undefined };
+}
+
+function resolveDisplayNameLang(){
+  const param = new URLSearchParams(window.location.search).get("lang");
+  if (param === "ja" || param === "en" || param === "both") return param;
+  return "ja";
+}
+
+async function loadDisplayNameDict(){
+  displayNameLang = resolveDisplayNameLang();
+  try{
+    const res = await fetch("/dashboard/ui/static/i18n/display_names.json", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && typeof data === "object") displayNameDict = data;
+  }catch(_e){
+    // Optional file; ignore load errors.
+  }
+}
+
+function autoDisplayNameFromId(id){
+  if (typeof id !== "string") return "";
+  const base = id.includes(":") ? id.split(":")[1] : id;
+  const spaced = base.replace(/[_\.-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!spaced) return "";
+  return spaced
+    .split(" ")
+    .map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : "")
+    .join(" ");
+}
+
+function getDisplayName(id, lang){
+  if (typeof id !== "string" || !id) return "-";
+  const info = normalizeResourceId(id);
+  const normalized = typeof info.normalized === "string" ? info.normalized : id;
+  const entry = displayNameDict[normalized];
+  const preferred = lang || displayNameLang || "ja";
+  if (entry && typeof entry === "object"){
+    const ja = typeof entry.ja === "string" ? entry.ja : "";
+    const en = typeof entry.en === "string" ? entry.en : "";
+    if (preferred === "both"){
+      if (ja && en) return `${ja} (${en})`;
+      if (ja) return ja;
+      if (en) return en;
+    }else if (preferred === "en"){
+      if (en) return en;
+      if (ja) return ja;
+    }else{
+      if (ja) return ja;
+      if (en) return en;
+    }
+  }
+  const auto = autoDisplayNameFromId(normalized);
+  if (auto) return auto;
+  return normalized || id;
+}
+
 function fmtRaw(n){
   if (n === null || n === undefined) return "-";
   if (typeof n !== "number" || Number.isNaN(n)) return String(n);
@@ -95,7 +162,12 @@ function tableFor(list, valueKey, metricClass, arrow, isRate){
   const unit = unitFor(activeKind);
 
   const rows = list.map((x, i) => {
-    const raw = (x.display_name || x.raw_name || "-");
+    const raw = (x.raw_name || x.display_name || "-");
+    const info = normalizeResourceId(raw);
+    const displayName = getDisplayName(raw);
+    const badge = info.kind === "gas" ? "Gas" : (info.kind === "fluid" ? "Fluid" : "");
+    const nameHtml = displayName === raw ? prettyName(raw) : displayName;
+    const badgeHtml = badge ? ` <span class="kind-badge">${badge}</span>` : "";
     const v = values[i] ?? 0;
     const pct = Math.max(0, Math.min(100, (v / max) * 100));
     const display = formatValue(v);
@@ -103,7 +175,7 @@ function tableFor(list, valueKey, metricClass, arrow, isRate){
     const arrowSpan = arrow ? `<span class="arrow">${arrow}</span>` : "";
     return `
       <tr>
-        <td class="name" title="${raw}">${prettyName(raw)}</td>
+        <td class="name" title="${raw}"><span class="label">${nameHtml}</span>${badgeHtml}</td>
         <td>
           <div class="row">
             <div class="barwrap" style="flex:1;">
@@ -344,5 +416,8 @@ document.querySelectorAll("#formatToggle .seg-btn").forEach(btn => {
 
 setView("list");
 setFormat("compact");
+loadDisplayNameDict().then(() => {
+  if (lastData) render(lastData);
+});
 load();
 setAuto(true);

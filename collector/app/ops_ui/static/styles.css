@@ -30,7 +30,8 @@ header { position:sticky; top:0; background:rgba(11,15,20,.9); backdrop-filter: 
 table { width:100%; border-collapse:collapse; font-size:13px; }
 th, td { padding:6px 4px; border-bottom:1px solid rgba(34,48,66,.6); }
 th { text-align:left; color:var(--muted); font-weight:600; }
-.name { max-width: 320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.name { max-width: 320px; display:flex; align-items:center; gap:6px; }
+.name .label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .barwrap { height:10px; background:rgba(34,48,66,.5); border-radius:999px; overflow:hidden; }
 .bar { height:100%; width:0%; }
 .bar.amount { background: rgba(130,180,255,.9); }
@@ -40,6 +41,9 @@ th { text-align:left; color:var(--muted); font-weight:600; }
 .val { min-width:92px; text-align:right; color:var(--text); font-variant-numeric: tabular-nums; }
 .arrow { margin-right:4px; font-weight:700; }
 .muted { color:var(--muted); }
+.kind-badge { display:inline-flex; align-items:center; font-size:0.75em; color:var(--muted);
+              padding:2px 6px; margin-left:6px; border:1px solid rgba(34,48,66,.8);
+              border-radius:999px; line-height:1; white-space:nowrap; }
 .right { margin-left:auto; display:flex; gap:10px; align-items:center; }
 input[type="range"] { width:160px; }
 #topnVal, #meta { font-variant-numeric: tabular-nums; }

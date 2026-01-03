@@ -1,0 +1,5 @@
+{
+  "minecraft:cobblestone": { "ja": "丸石", "en": "Cobblestone" },
+  "minecraft:stone": { "ja": "石", "en": "Stone" },
+  "mekanism:hydrogen_chloride": { "ja": "塩化水素", "en": "Hydrogen Chloride" }
+}
