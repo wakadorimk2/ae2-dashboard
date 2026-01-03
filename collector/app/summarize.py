@@ -67,6 +67,7 @@ def compute_rankings(
     """
     1) top_amount: 絶対量 TopN（raw_name単位で合算）
     2) top_growth_per_min: 増加量 TopN（/min, 前回比, raw_name単位）
+    3) top_decrease_per_min: 減少量 TopN（/min, 前回比, raw_name単位, 正の値で返す）
     ※ Cloud Runの再起動で前回状態はリセットされる（最初の1回はgrowth空）
     """
     global _prev_amounts, _prev_ts
@@ -92,6 +93,7 @@ def compute_rankings(
 
     # 増加 Top（/min）
     top_growth_fmt: List[Dict[str, Any]] = []
+    top_decrease_fmt: List[Dict[str, Any]] = []
     if _prev_ts is not None:
         dt_min = max(ts - _prev_ts, 1.0) / 60.0
 
@@ -101,14 +103,21 @@ def compute_rankings(
             prev_by_raw[raw] = prev_by_raw.get(raw, 0) + amt
 
         growth = []
-        for raw, amt in cur_by_raw.items():
+        decrease = []
+        all_raws = set(cur_by_raw.keys()) | set(prev_by_raw.keys())
+        for raw in all_raws:
+            amt = cur_by_raw.get(raw, 0)
             prev = prev_by_raw.get(raw, 0)
             delta = amt - prev
             if delta > 0:
                 growth.append((raw, int(delta / dt_min)))
+            elif delta < 0:
+                decrease.append((raw, int((-delta) / dt_min)))
 
         growth.sort(key=lambda x: x[1], reverse=True)
         top_growth_fmt = [{"raw_name": raw, "growth_per_min": g} for raw, g in growth[:top_n]]
+        decrease.sort(key=lambda x: x[1], reverse=True)
+        top_decrease_fmt = [{"raw_name": raw, "decrease_per_min": g} for raw, g in decrease[:top_n]]
 
     # 状態更新
     _prev_amounts = cur
@@ -117,4 +126,5 @@ def compute_rankings(
     return {
         "top_amount": top_amount_fmt,
         "top_growth_per_min": top_growth_fmt,
+        "top_decrease_per_min": top_decrease_fmt,
     }
