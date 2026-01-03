@@ -266,3 +266,6 @@ __marimo__/
 
 # extracted mod icons
 collector/app/ops_ui/static/icons/
+
+# config file
+cc/config.lua
