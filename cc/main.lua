@@ -52,12 +52,24 @@ while true do
   ))
 
   print("checkURL:", http.checkURL(cfg.INGEST_URL))
-  local ok, txt, code = post.postJSON(cfg.INGEST_URL, payload)
+
+  local ok, job_or_err = post.postEntriesChunked(INGEST_URL, entries, {
+    chunk_size = 300,
+    on_start = function(job, total, chunk)
+      print(("job_id=%s parts=%d chunk=%d"):format(job, total, chunk))
+    end,
+    on_ok = function(job, i, total, code)
+      print(("POST %d/%d OK code=%s"):format(i, total, tostring(code)))
+    end,
+    on_error = function(job, i, total, err)
+      print(("POST %d/%d NG: %s"):format(i, total, err))
+    end,
+  })
+
   if not ok then
-    print(txt)
-  else
-    print("POST OK", code or "", txt:sub(1, 200))
+    print("FAILED:", job_or_err)
   end
+
 
   sleep(cfg.INTERVAL_SEC)
 end
