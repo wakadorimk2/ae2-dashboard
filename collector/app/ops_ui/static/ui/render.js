@@ -30,7 +30,7 @@ function tableFor(list, valueKey, metricClass, arrow, isRate, compressMethod) {
   const displayValues = baseValues.map(v => v * displayScale);
   const method = compressMethod === "sqrt" ? "sqrt" : "log1p";
   const normalizer = buildListNormalizer(baseValues, method);
-  const unit = unitFor(state.activeKind);
+  const unit = unitFor(state.kind);
 
   const rows = list.map((x, i) => {
     const raw = (x.raw_name || x.display_name || "-");
@@ -118,7 +118,7 @@ export function renderSummary(data, onKindSelect) {
     const decreaseTitle = decreaseTop ? fmtRaw(scaleValue(decreaseTop.value)) : "-";
     const unit = unitFor(kind);
 
-    const isActive = state.activeKind === kind ? "active" : "";
+    const isActive = state.kind === kind ? "active" : "";
     return `
       <div class="card summary-card ${isActive}" data-kind="${kind}">
         <div class="summary-row">
@@ -154,12 +154,12 @@ export function renderSummary(data, onKindSelect) {
 
 export function updateTabs() {
   document.querySelectorAll(".tab").forEach(b => {
-    b.classList.toggle("active", b.dataset.kind === state.activeKind);
+    b.classList.toggle("active", b.dataset.kind === state.kind);
   });
 }
 
 export function updateUnitLabels() {
-  const unit = unitFor(state.activeKind);
+  const unit = unitFor(state.kind);
   /** @type {HTMLElement} */ (document.getElementById("unit-amount")).textContent = unit;
   /** @type {HTMLElement} */ (document.getElementById("unit-growth")).textContent = unit;
   /** @type {HTMLElement} */ (document.getElementById("unit-decrease")).textContent = unit;
@@ -255,10 +255,10 @@ export function render(data, opts = {}) {
   const flat = flattenTop(data);
   state.lastDeltaNormalizers = buildDeltaNormalizersByKind(flat);
 
-  if (state.viewMode === "list") {
-    const amount = topList(data, "amount", state.activeKind);
-    const growth = topList(data, "growth_per_min", state.activeKind);
-    const decrease = topList(data, "decrease_per_min", state.activeKind);
+  if (state.view === "list") {
+    const amount = topList(data, "amount", state.kind);
+    const growth = topList(data, "growth_per_min", state.kind);
+    const decrease = topList(data, "decrease_per_min", state.kind);
 
     /** @type {HTMLElement} */ (document.getElementById("amount")).innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
     /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth_per_min", "growth", "↑", true, "log1p");

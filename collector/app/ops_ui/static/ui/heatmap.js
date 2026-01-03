@@ -184,7 +184,7 @@ export function renderHeatmap(flat) {
   const empty = /** @type {HTMLElement | null} */ (document.getElementById("heatmapEmpty"));
   if (!canvas || !empty) return;
 
-  const baseList = flat?.[state.activeKind] || [];
+  const baseList = flat?.[state.kind] || [];
   const entries = baseList.map(coerceEntry).filter((entry) => entry);
   const list = selectHeatmapEntries(/** @type {HeatEntry[]} */ (entries));
 
@@ -221,7 +221,7 @@ export function renderHeatmap(flat) {
   }
 
   const tiles = buildTreemap(weighted, width, height);
-  const unit = unitFor(state.activeKind);
+  const unit = unitFor(state.kind);
 
   const frag = document.createDocumentFragment();
   for (const tile of tiles) {

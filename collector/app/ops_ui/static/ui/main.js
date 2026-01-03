@@ -23,7 +23,7 @@ function setErr(msg) {
  * @param {import("./state.js").Kind} kind
  */
 function onKindSelect(kind) {
-  state.activeKind = kind;
+  state.kind = kind;
   updateTabs();
   load();
 }
@@ -71,12 +71,12 @@ export function setAuto(on) {
  * @param {import("./state.js").ViewMode} mode
  */
 export function setView(mode) {
-  state.viewMode = mode;
+  state.view = mode;
   document.querySelectorAll("#viewToggle .seg-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.view === state.viewMode);
+    btn.classList.toggle("active", btn.dataset.view === state.view);
   });
-  /** @type {HTMLElement} */ (document.getElementById("viewList")).style.display = state.viewMode === "list" ? "block" : "none";
-  /** @type {HTMLElement} */ (document.getElementById("viewHeatmap")).style.display = state.viewMode === "heatmap" ? "block" : "none";
+  /** @type {HTMLElement} */ (document.getElementById("viewList")).style.display = state.view === "list" ? "block" : "none";
+  /** @type {HTMLElement} */ (document.getElementById("viewHeatmap")).style.display = state.view === "heatmap" ? "block" : "none";
   renderWithHandlers(state.lastData);
 }
 
@@ -105,7 +105,7 @@ document.querySelectorAll(".tab").forEach(btn => {
   btn.addEventListener("click", () => {
     const kind = /** @type {import("./state.js").Kind} */ (btn.dataset.kind);
     if (!kind) return;
-    state.activeKind = kind;
+    state.kind = kind;
     updateTabs();
     load();
   });
@@ -135,7 +135,7 @@ document.querySelectorAll("#heatmapCountToggle .seg-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const count = Number(btn.dataset.count);
     if (!Number.isFinite(count) || !count) return;
-    state.heatmapCount = count;
+    state.heatmapCount = /** @type {import("./types.ts").HeatmapCount} */ (count);
     updateHeatmapToggles();
     renderWithHandlers(state.lastData);
   });

@@ -2,9 +2,15 @@
 
 /**
  * @typedef {"item"|"fluid"|"gas"} Kind
- * @typedef {"list"|"heatmap"} ViewMode
+ */
+// NOTE: UI uses singular kind values; data types in `ui/types.ts` use plural keys.
+/**
+ * @typedef {import("./types.ts").ViewMode} ViewMode
  * @typedef {"raw"|"compact"} FormatMode
+ * @typedef {import("./types.ts").HeatmapCount} HeatmapCount
  * @typedef {"amount"|"delta"} HeatmapSort
+ * @typedef {import("./types.ts").DashboardData} DashboardData
+ * @typedef {{ kind: Kind, view: ViewMode, heatmapCount: HeatmapCount, heatmapSort: HeatmapSort, lastData?: DashboardData }} UIState
  */
 
 export const BAR_MIN_RATIO = 0.02;
@@ -25,14 +31,16 @@ export const kindUnit = {
   gas: "mB",
 };
 
-/** @type {{ activeKind: Kind, viewMode: ViewMode, formatMode: FormatMode, heatmapCount: number, heatmapSort: HeatmapSort, lastData: import("./types.js").DashboardData | null, timer: number | null, lastDeltaNormalizers: unknown }} */
+// TODO: Consider moving `timer` and `lastDeltaNormalizers` out of UI state (runtime-only).
+/** @type {UIState & { formatMode: FormatMode, timer: number | null, lastDeltaNormalizers: unknown }} */
 export const state = {
-  activeKind: "item",
-  viewMode: "list",
+  kind: "item",
+  view: "list",
   formatMode: "compact",
   heatmapCount: 80,
   heatmapSort: "amount",
-  lastData: null,
+  // NOTE: undefined until first load; raw API payload isn't normalized to DashboardData yet.
+  lastData: undefined,
   timer: null,
   lastDeltaNormalizers: null,
 };
