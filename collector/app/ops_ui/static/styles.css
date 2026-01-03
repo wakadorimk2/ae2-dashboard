@@ -31,7 +31,8 @@ table { width:100%; border-collapse:collapse; font-size:13px; }
 th, td { padding:6px 4px; border-bottom:1px solid rgba(34,48,66,.6); }
 th { text-align:left; color:var(--muted); font-weight:600; }
 .name { max-width: 320px; display:flex; align-items:center; gap:6px; }
-.name .label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.name .label { min-width:0; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.item-icon { width:16px; height:16px; image-rendering: pixelated; flex:0 0 auto; }
 .barwrap { height:10px; background:rgba(34,48,66,.5); border-radius:999px; overflow:hidden; }
 .bar { height:100%; width:0%; }
 .bar.amount { background: rgba(130,180,255,.9); }

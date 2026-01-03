@@ -18,6 +18,8 @@ const kindUnit = {
 
 let displayNameDict = {};
 let displayNameLang = "ja";
+let iconIndex = {};
+let iconIndexPromise = null;
 
 function normalizeResourceId(id){
   if (typeof id !== "string") return { normalized: id, kind: undefined };
@@ -26,6 +28,12 @@ function normalizeResourceId(id){
     return { normalized: parts.slice(1).join(":"), kind: parts[0] };
   }
   return { normalized: id, kind: undefined };
+}
+
+function normalizeId(id){
+  const info = normalizeResourceId(id);
+  const normalized = typeof info.normalized === "string" ? info.normalized : id;
+  return { id: normalized, kind: info.kind };
 }
 
 function resolveDisplayNameLang(){
@@ -44,6 +52,31 @@ async function loadDisplayNameDict(){
   }catch(_e){
     // Optional file; ignore load errors.
   }
+}
+
+async function loadIconIndex(){
+  if (iconIndexPromise) return iconIndexPromise;
+  iconIndexPromise = (async () => {
+    try{
+      const res = await fetch("/dashboard/ui/static/icons/icon_index.json", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data === "object") iconIndex = data;
+    }catch(_e){
+      iconIndex = {};
+    }
+  })();
+  return iconIndexPromise;
+}
+
+function getIconUrl(rawId){
+  const info = normalizeId(rawId);
+  if (!info || typeof info.id !== "string" || !info.id) return null;
+  const candidates = iconIndex[info.id];
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const first = candidates.find(v => typeof v === "string" && v);
+  if (!first) return null;
+  return first;
 }
 
 function autoDisplayNameFromId(id){
@@ -168,6 +201,8 @@ function tableFor(list, valueKey, metricClass, arrow, isRate){
     const badge = info.kind === "gas" ? "Gas" : (info.kind === "fluid" ? "Fluid" : "");
     const nameHtml = displayName === raw ? prettyName(raw) : displayName;
     const badgeHtml = badge ? ` <span class="kind-badge">${badge}</span>` : "";
+    const iconUrl = getIconUrl(raw);
+    const iconHtml = iconUrl ? `<img class="item-icon" src="${iconUrl}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : "";
     const v = values[i] ?? 0;
     const pct = Math.max(0, Math.min(100, (v / max) * 100));
     const display = formatValue(v);
@@ -175,7 +210,7 @@ function tableFor(list, valueKey, metricClass, arrow, isRate){
     const arrowSpan = arrow ? `<span class="arrow">${arrow}</span>` : "";
     return `
       <tr>
-        <td class="name" title="${raw}"><span class="label">${nameHtml}</span>${badgeHtml}</td>
+        <td class="name" title="${raw}">${iconHtml}<span class="label">${nameHtml}</span>${badgeHtml}</td>
         <td>
           <div class="row">
             <div class="barwrap" style="flex:1;">
@@ -417,6 +452,9 @@ document.querySelectorAll("#formatToggle .seg-btn").forEach(btn => {
 setView("list");
 setFormat("compact");
 loadDisplayNameDict().then(() => {
+  if (lastData) render(lastData);
+});
+loadIconIndex().then(() => {
   if (lastData) render(lastData);
 });
 load();
