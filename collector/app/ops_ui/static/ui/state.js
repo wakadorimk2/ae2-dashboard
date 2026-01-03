@@ -1,9 +1,9 @@
 // @ts-check
 
 /**
- * @typedef {"item"|"fluid"|"gas"} Kind
+ * @typedef {import("./types.ts").Kind} Kind
  */
-// NOTE: UI uses singular kind values; data types in `ui/types.ts` use plural keys.
+// NOTE: UI uses singular kind values; DashboardData uses plural kind keys.
 /**
  * @typedef {import("./types.ts").ViewMode} ViewMode
  * @typedef {"raw"|"compact"} FormatMode
@@ -39,7 +39,7 @@ export const state = {
   formatMode: "compact",
   heatmapCount: 80,
   heatmapSort: "amount",
-  // NOTE: undefined until first load; raw API payload isn't normalized to DashboardData yet.
+  // NOTE: undefined until first load; only normalized data is stored.
   lastData: undefined,
   timer: null,
   lastDeltaNormalizers: null,

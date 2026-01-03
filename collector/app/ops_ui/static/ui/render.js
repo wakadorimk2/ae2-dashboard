@@ -7,12 +7,23 @@ import { renderHeatmap } from "./heatmap.js";
 import { applyMinRatio01, buildListNormalizer, toPerMinute } from "./scale_bridge.js";
 import { BAR_MIN_RATIO, DELTA_UNIT, kindLabel, state } from "./state.js";
 
-/** @typedef {import("./types.js").TopEntry} TopEntry */
-/** @typedef {import("./types.js").DashboardData} DashboardData */
+/** @typedef {import("./types.ts").Entry} Entry */
+/** @typedef {import("./types.ts").DashboardData} DashboardData */
+/** @typedef {import("./types.ts").Kind} Kind */
+/** @typedef {import("./types.ts").KindKey} KindKey */
+/** @typedef {import("./types.ts").Metric} Metric */
 
 /**
- * @param {TopEntry[]} list
- * @param {string} valueKey
+ * @param {Kind} kind
+ * @returns {KindKey}
+ */
+function kindToKey(kind) {
+  return kind === "fluid" ? "fluids" : (kind === "gas" ? "gases" : "items");
+}
+
+/**
+ * @param {Entry[]} list
+ * @param {Metric} valueKey
  * @param {string} metricClass
  * @param {string} arrow
  * @param {boolean} isRate
@@ -33,7 +44,7 @@ function tableFor(list, valueKey, metricClass, arrow, isRate, compressMethod) {
   const unit = unitFor(state.kind);
 
   const rows = list.map((x, i) => {
-    const raw = (x.raw_name || x.display_name || "-");
+    const raw = (x.raw_name || x.id || x.display_name || x.name || "-");
     const info = normalizeResourceId(raw);
     const displayName = getDisplayName(raw);
     const badge = info.kind === "gas" ? "Gas" : (info.kind === "fluid" ? "Fluid" : "");
@@ -75,40 +86,41 @@ function tableFor(list, valueKey, metricClass, arrow, isRate, compressMethod) {
 
 /**
  * @param {DashboardData} data
- * @param {string} metric
- * @param {string} kind
- * @returns {TopEntry[]}
+ * @param {Metric} metric
+ * @param {Kind} kind
+ * @returns {Entry[]}
  */
 function topList(data, metric, kind) {
-  return (data.top?.[metric]?.[kind]) || [];
+  const kindKey = kindToKey(kind);
+  return (data.top?.[metric]?.[kindKey]) || [];
 }
 
 /**
- * @param {TopEntry[]} list
- * @param {string} valueKey
+ * @param {Entry[]} list
+ * @param {Metric} valueKey
  * @returns {{ name: string, value: number } | null}
  */
 function topOne(list, valueKey) {
   if (!Array.isArray(list) || list.length === 0) return null;
   const entry = list[0];
   if (!entry) return null;
-  const name = entry.display_name || entry.raw_name || "-";
+  const name = entry.display_name || entry.raw_name || entry.name || entry.id || "-";
   const v = typeof entry[valueKey] === "number" ? entry[valueKey] : 0;
   return { name, value: v };
 }
 
 /**
  * @param {DashboardData} data
- * @param {(kind: import("./state.js").Kind) => void} [onKindSelect]
+ * @param {(kind: Kind) => void} [onKindSelect]
  */
 export function renderSummary(data, onKindSelect) {
   const summary = /** @type {HTMLElement} */ (document.getElementById("summary"));
-  const kinds = ["item", "fluid", "gas"];
+  const kinds = /** @type {Kind[]} */ (["item", "fluid", "gas"]);
 
   const cards = kinds.map(kind => {
     const amountTop = topOne(topList(data, "amount", kind), "amount");
-    const growthTop = topOne(topList(data, "growth_per_min", kind), "growth_per_min");
-    const decreaseTop = topOne(topList(data, "decrease_per_min", kind), "decrease_per_min");
+    const growthTop = topOne(topList(data, "growth", kind), "growth");
+    const decreaseTop = topOne(topList(data, "decrease", kind), "decrease");
 
     const amountValue = amountTop ? formatValue(amountTop.value) : "-";
     const growthValue = growthTop ? formatValue(scaleValue(growthTop.value)) : "-";
@@ -144,7 +156,7 @@ export function renderSummary(data, onKindSelect) {
   if (onKindSelect) {
     summary.querySelectorAll(".summary-card").forEach(card => {
       card.addEventListener("click", () => {
-        const kind = /** @type {import("./state.js").Kind} */ (card.dataset.kind);
+        const kind = /** @type {Kind} */ (card.dataset.kind);
         if (!kind) return;
         onKindSelect(kind);
       });
@@ -185,12 +197,12 @@ export function renderMeta(data) {
  * @returns {{ item: Array<{ raw_name: string, display_name: string, amount: number, growth: number, decrease: number, net: number }>, fluid: Array<{ raw_name: string, display_name: string, amount: number, growth: number, decrease: number, net: number }>, gas: Array<{ raw_name: string, display_name: string, amount: number, growth: number, decrease: number, net: number }> }}
  */
 export function flattenTop(data) {
-  const kinds = ["item", "fluid", "gas"];
+  const kinds = /** @type {Kind[]} */ (["item", "fluid", "gas"]);
   const out = { item: [], fluid: [], gas: [] };
   const metrics = [
     { key: "amount", field: "amount" },
-    { key: "growth_per_min", field: "growth" },
-    { key: "decrease_per_min", field: "decrease" },
+    { key: "growth", field: "growth" },
+    { key: "decrease", field: "decrease" },
   ];
 
   for (const kind of kinds) {
@@ -199,11 +211,11 @@ export function flattenTop(data) {
       const list = topList(data, m.key, kind);
       for (const entry of list) {
         if (!entry) continue;
-        const id = entry.raw_name || entry.display_name || "-";
+        const id = entry.raw_name || entry.display_name || entry.id || entry.name || "-";
         if (!map.has(id)) {
           map.set(id, {
-            raw_name: entry.raw_name || "-",
-            display_name: entry.display_name || entry.raw_name || "-",
+            raw_name: entry.raw_name || entry.id || "-",
+            display_name: entry.display_name || entry.name || entry.raw_name || entry.id || "-",
             amount: 0,
             growth: 0,
             decrease: 0,
@@ -245,7 +257,7 @@ export function buildDeltaNormalizersByKind(flat) {
 
 /**
  * @param {DashboardData} data
- * @param {{ onKindSelect?: (kind: import("./state.js").Kind) => void }} [opts]
+ * @param {{ onKindSelect?: (kind: Kind) => void }} [opts]
  */
 export function render(data, opts = {}) {
   if (!data) return;
@@ -257,12 +269,12 @@ export function render(data, opts = {}) {
 
   if (state.view === "list") {
     const amount = topList(data, "amount", state.kind);
-    const growth = topList(data, "growth_per_min", state.kind);
-    const decrease = topList(data, "decrease_per_min", state.kind);
+    const growth = topList(data, "growth", state.kind);
+    const decrease = topList(data, "decrease", state.kind);
 
     /** @type {HTMLElement} */ (document.getElementById("amount")).innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
-    /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth_per_min", "growth", "↑", true, "log1p");
-    /** @type {HTMLElement} */ (document.getElementById("decrease")).innerHTML = tableFor(decrease, "decrease_per_min", "decrease", "↓", true, "log1p");
+    /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth", "growth", "↑", true, "log1p");
+    /** @type {HTMLElement} */ (document.getElementById("decrease")).innerHTML = tableFor(decrease, "decrease", "decrease", "↓", true, "log1p");
     return;
   }
 

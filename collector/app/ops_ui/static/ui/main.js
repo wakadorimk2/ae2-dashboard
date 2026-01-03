@@ -2,6 +2,7 @@
 
 import { loadDisplayNameDict } from "./i18n.js";
 import { loadIconIndex } from "./icons.js";
+import { normalizeDashboardData } from "./normalize.js";
 import { render, updateTabs } from "./render.js";
 import { state, TOP_N } from "./state.js";
 
@@ -20,7 +21,7 @@ function setErr(msg) {
 }
 
 /**
- * @param {import("./state.js").Kind} kind
+ * @param {import("./types.ts").Kind} kind
  */
 function onKindSelect(kind) {
   state.kind = kind;
@@ -29,11 +30,11 @@ function onKindSelect(kind) {
 }
 
 /**
- * @param {unknown} data
+ * @param {import("./types.ts").DashboardData | undefined} data
  */
 function renderWithHandlers(data) {
   if (!data) return;
-  render(/** @type {import("./types.js").DashboardData} */ (data), { onKindSelect });
+  render(data, { onKindSelect });
 }
 
 export async function load() {
@@ -46,7 +47,7 @@ export async function load() {
       const t = await res.text();
       throw new Error(`HTTP ${res.status}: ${t}`);
     }
-    data = await res.json();
+    data = normalizeDashboardData(await res.json());
   } catch (e) {
     setErr(String(e));
     return;
@@ -68,7 +69,7 @@ export function setAuto(on) {
 }
 
 /**
- * @param {import("./state.js").ViewMode} mode
+ * @param {import("./types.ts").ViewMode} mode
  */
 export function setView(mode) {
   state.view = mode;
@@ -103,7 +104,7 @@ function updateHeatmapToggles() {
 
 document.querySelectorAll(".tab").forEach(btn => {
   btn.addEventListener("click", () => {
-    const kind = /** @type {import("./state.js").Kind} */ (btn.dataset.kind);
+    const kind = /** @type {import("./types.ts").Kind} */ (btn.dataset.kind);
     if (!kind) return;
     state.kind = kind;
     updateTabs();
@@ -117,7 +118,7 @@ document.getElementById("perHour").addEventListener("change", () => {
 
 document.querySelectorAll("#viewToggle .seg-btn").forEach(btn => {
   btn.addEventListener("click", () => {
-    const mode = /** @type {import("./state.js").ViewMode} */ (btn.dataset.view);
+    const mode = /** @type {import("./types.ts").ViewMode} */ (btn.dataset.view);
     if (!mode) return;
     setView(mode);
   });

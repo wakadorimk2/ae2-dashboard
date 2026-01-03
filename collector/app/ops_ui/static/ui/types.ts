@@ -1,19 +1,33 @@
-export type Kind = "items" | "fluids" | "gases";
+export type Kind = "item" | "fluid" | "gas";
+export type KindKey = "items" | "fluids" | "gases";
 export type ViewMode = "heatmap" | "list";
 export type HeatmapCount = 40 | 80 | 120;
+export type Metric = "amount" | "growth" | "decrease";
 
 export type Entry = {
   id: string;
   name: string;
   amount: number;
-  growth_per_min: number;
-  decrease_per_min: number;
+  growth: number;
+  decrease: number;
+  raw_name?: string;
+  display_name?: string;
+};
+
+export type TopByKind = {
+  items?: Entry[];
+  fluids?: Entry[];
+  gases?: Entry[];
+};
+
+export type DashboardTop = {
+  amount?: TopByKind;
+  growth?: TopByKind;
+  decrease?: TopByKind;
 };
 
 export type DashboardData = {
-  top?: {
-    items?: Entry[];
-    fluids?: Entry[];
-    gases?: Entry[];
-  };
+  top?: DashboardTop;
+  source?: string;
+  ts?: number;
 };
