@@ -3,7 +3,7 @@
 import { loadDisplayNameDict } from "./i18n.js";
 import { loadIconIndex } from "./icons.js";
 import { normalizeDashboardData } from "./normalize.js";
-import { render, updateTabs } from "./render.js";
+import { render, updateKindToggle } from "./render.js";
 import { state, TOP_N } from "./state.js";
 
 /**
@@ -25,7 +25,11 @@ function setErr(msg) {
  */
 function onKindSelect(kind) {
   state.kind = kind;
-  updateTabs();
+  updateKindToggle();
+  if (state.lastData) {
+    renderWithHandlers(state.lastData);
+    return;
+  }
   load();
 }
 
@@ -34,7 +38,7 @@ function onKindSelect(kind) {
  */
 function renderWithHandlers(data) {
   if (!data) return;
-  render(data, { onKindSelect });
+  render(data);
 }
 
 export async function load() {
@@ -68,93 +72,16 @@ export function setAuto(on) {
   if (on) state.timer = setInterval(load, 10000);
 }
 
-/**
- * @param {import("./types.ts").ViewMode} mode
- */
-export function setView(mode) {
-  state.view = mode;
-  document.querySelectorAll("#viewToggle .seg-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.view === state.view);
-  });
-  /** @type {HTMLElement} */ (document.getElementById("viewList")).style.display = state.view === "list" ? "block" : "none";
-  /** @type {HTMLElement} */ (document.getElementById("viewHeatmap")).style.display = state.view === "heatmap" ? "block" : "none";
-  renderWithHandlers(state.lastData);
-}
-
-/**
- * @param {import("./state.js").FormatMode} mode
- */
-export function setFormat(mode) {
-  state.formatMode = mode;
-  document.querySelectorAll("#formatToggle .seg-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.format === state.formatMode);
-  });
-  renderWithHandlers(state.lastData);
-}
-
-function updateHeatmapToggles() {
-  document.querySelectorAll("#heatmapCountToggle .seg-btn").forEach(btn => {
-    const count = Number(btn.dataset.count);
-    btn.classList.toggle("active", count === state.heatmapCount);
-  });
-  document.querySelectorAll("#heatmapSortToggle .seg-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.sort === state.heatmapSort);
-  });
-}
-
-document.querySelectorAll(".tab").forEach(btn => {
+document.querySelectorAll("#kindToggle .seg-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const kind = /** @type {import("./types.ts").Kind} */ (btn.dataset.kind);
     if (!kind) return;
-    state.kind = kind;
-    updateTabs();
-    load();
+    if (kind === state.kind) return;
+    onKindSelect(kind);
   });
 });
 
-document.getElementById("perHour").addEventListener("change", () => {
-  renderWithHandlers(state.lastData);
-});
-
-document.querySelectorAll("#viewToggle .seg-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const mode = /** @type {import("./types.ts").ViewMode} */ (btn.dataset.view);
-    if (!mode) return;
-    setView(mode);
-  });
-});
-
-document.querySelectorAll("#formatToggle .seg-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const mode = /** @type {import("./state.js").FormatMode} */ (btn.dataset.format);
-    if (!mode) return;
-    setFormat(mode);
-  });
-});
-
-document.querySelectorAll("#heatmapCountToggle .seg-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const count = Number(btn.dataset.count);
-    if (!Number.isFinite(count) || !count) return;
-    state.heatmapCount = /** @type {import("./types.ts").HeatmapCount} */ (count);
-    updateHeatmapToggles();
-    renderWithHandlers(state.lastData);
-  });
-});
-
-document.querySelectorAll("#heatmapSortToggle .seg-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const sort = /** @type {import("./state.js").HeatmapSort} */ (btn.dataset.sort);
-    if (!sort) return;
-    state.heatmapSort = sort;
-    updateHeatmapToggles();
-    renderWithHandlers(state.lastData);
-  });
-});
-
-setView("list");
-setFormat("compact");
-updateHeatmapToggles();
+updateKindToggle();
 loadDisplayNameDict().then(() => {
   if (state.lastData) renderWithHandlers(state.lastData);
 });

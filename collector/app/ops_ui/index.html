@@ -11,36 +11,24 @@
     <div class="title">AE2 Dashboard</div>
     <span class="pill meta" id="meta">loading…</span>
     <div class="right">
-        <div class="segmented" id="viewToggle">
-          <button class="seg-btn active" data-view="list">List</button>
-          <button class="seg-btn" data-view="heatmap">Heatmap</button>
-        </div>
-
-        <div class="segmented" id="formatToggle">
-          <button class="seg-btn" data-format="raw">Raw</button>
-          <button class="seg-btn active" data-format="compact">Compact</button>
-        </div>
-
-        <label class="pill" style="display:flex; gap:8px; align-items:center;">
-        <input id="perHour" type="checkbox" />
-        <span>/hour</span>
-        </label>
-
+      <div class="segmented" id="kindToggle">
+        <button class="seg-btn active" data-kind="item">Items</button>
+        <button class="seg-btn" data-kind="fluid">Fluids</button>
+        <button class="seg-btn" data-kind="gas">Gases</button>
+      </div>
     </div>
   </header>
 
   <div class="wrap">
     <div id="err" class="err" style="display:none;"></div>
 
-    <div id="summary" class="summary-grid"></div>
+    <div id="viewHeatmap" class="card heatmap-card">
+      <h2>Heatmap</h2>
+      <div id="heatmapCanvas" class="heatmap-canvas"></div>
+      <div class="muted heatmap-empty" id="heatmapEmpty">No data.</div>
+    </div>
 
-    <div id="viewList">
-      <div class="tabs">
-        <button class="tab active" data-kind="item">Items</button>
-        <button class="tab" data-kind="fluid">Fluids</button>
-        <button class="tab" data-kind="gas">Gases</button>
-      </div>
-
+    <div id="viewList" class="list-section">
       <div class="grid">
         <div class="card">
           <h2>Amount <span class="unit" id="unit-amount"></span></h2>
@@ -55,32 +43,6 @@
           <div id="decrease"></div>
         </div>
       </div>
-    </div>
-
-    <div id="viewHeatmap" class="card" style="display:none;">
-      <h2>Heatmap</h2>
-
-      <div class="tabs heatmap-tabs">
-        <button class="tab active" data-kind="item">Items</button>
-        <button class="tab" data-kind="fluid">Fluids</button>
-        <button class="tab" data-kind="gas">Gases</button>
-      </div>
-
-      <div class="heatmap-toolbar">
-        <span class="muted">表示件数</span>
-        <div class="segmented" id="heatmapCountToggle">
-          <button class="seg-btn" data-count="40">40</button>
-          <button class="seg-btn active" data-count="80">80</button>
-          <button class="seg-btn" data-count="120">120</button>
-        </div>
-        <div class="segmented" id="heatmapSortToggle">
-          <button class="seg-btn active" data-sort="amount">Amount</button>
-          <button class="seg-btn" data-sort="delta">|Delta|</button>
-        </div>
-      </div>
-
-      <div id="heatmapCanvas" class="heatmap-canvas"></div>
-      <div class="muted heatmap-empty" id="heatmapEmpty">No data.</div>
     </div>
   </div>
 

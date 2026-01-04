@@ -2,10 +2,10 @@
 
 import { getDisplayName, normalizeResourceId } from "./i18n.js";
 import { getIconUrl } from "./icons.js";
-import { fmtRaw, formatValue, prettyName, scaleValue, unitFor } from "./format.js";
+import { fmtRaw, formatValue, prettyName, unitFor } from "./format.js";
 import { renderHeatmap } from "./heatmap.js";
 import { applyMinRatio01, buildListNormalizer, toPerMinute } from "./scale_bridge.js";
-import { BAR_MIN_RATIO, DELTA_UNIT, kindLabel, state } from "./state.js";
+import { BAR_MIN_RATIO, DELTA_UNIT, state } from "./state.js";
 
 /** @typedef {import("./types.ts").Entry} Entry */
 /** @typedef {import("./types.ts").DashboardData} DashboardData */
@@ -95,78 +95,9 @@ function topList(data, metric, kind) {
   return (data.top?.[metric]?.[kindKey]) || [];
 }
 
-/**
- * @param {Entry[]} list
- * @param {Metric} valueKey
- * @returns {{ name: string, value: number } | null}
- */
-function topOne(list, valueKey) {
-  if (!Array.isArray(list) || list.length === 0) return null;
-  const entry = list[0];
-  if (!entry) return null;
-  const name = entry.display_name || entry.raw_name || entry.name || entry.id || "-";
-  const v = typeof entry[valueKey] === "number" ? entry[valueKey] : 0;
-  return { name, value: v };
-}
-
-/**
- * @param {DashboardData} data
- * @param {(kind: Kind) => void} [onKindSelect]
- */
-export function renderSummary(data, onKindSelect) {
-  const summary = /** @type {HTMLElement} */ (document.getElementById("summary"));
-  const kinds = /** @type {Kind[]} */ (["item", "fluid", "gas"]);
-
-  const cards = kinds.map(kind => {
-    const amountTop = topOne(topList(data, "amount", kind), "amount");
-    const growthTop = topOne(topList(data, "growth", kind), "growth");
-    const decreaseTop = topOne(topList(data, "decrease", kind), "decrease");
-
-    const amountValue = amountTop ? formatValue(amountTop.value) : "-";
-    const growthValue = growthTop ? formatValue(scaleValue(growthTop.value)) : "-";
-    const decreaseValue = decreaseTop ? formatValue(scaleValue(decreaseTop.value)) : "-";
-    const amountTitle = amountTop ? fmtRaw(amountTop.value) : "-";
-    const growthTitle = growthTop ? fmtRaw(scaleValue(growthTop.value)) : "-";
-    const decreaseTitle = decreaseTop ? fmtRaw(scaleValue(decreaseTop.value)) : "-";
-    const unit = unitFor(kind);
-
-    const isActive = state.kind === kind ? "active" : "";
-    return `
-      <div class="card summary-card ${isActive}" data-kind="${kind}">
-        <div class="summary-row">
-          <div>
-            <div class="summary-kind">${kindLabel[kind]}</div>
-            <div class="summary-metric">Amount <span class="unit">${unitFor(kind)}</span></div>
-          </div>
-          <div class="val" title="${amountTitle}">${amountValue} <span class="unit">${unit}</span></div>
-        </div>
-        <div class="summary-row">
-          <div class="summary-metric">↑ Growth</div>
-          <div class="val" title="${growthTitle}"><span class="arrow">↑</span>${growthValue} <span class="unit">${unit}</span></div>
-        </div>
-        <div class="summary-row">
-          <div class="summary-metric">↓ Decrease</div>
-          <div class="val" title="${decreaseTitle}"><span class="arrow">↓</span>${decreaseValue} <span class="unit">${unit}</span></div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  summary.innerHTML = cards;
-  if (onKindSelect) {
-    summary.querySelectorAll(".summary-card").forEach(card => {
-      card.addEventListener("click", () => {
-        const kind = /** @type {Kind} */ (card.dataset.kind);
-        if (!kind) return;
-        onKindSelect(kind);
-      });
-    });
-  }
-}
-
-export function updateTabs() {
-  document.querySelectorAll(".tab").forEach(b => {
-    b.classList.toggle("active", b.dataset.kind === state.kind);
+export function updateKindToggle() {
+  document.querySelectorAll("#kindToggle .seg-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.kind === state.kind);
   });
 }
 
@@ -257,26 +188,19 @@ export function buildDeltaNormalizersByKind(flat) {
 
 /**
  * @param {DashboardData} data
- * @param {{ onKindSelect?: (kind: Kind) => void }} [opts]
  */
-export function render(data, opts = {}) {
+export function render(data) {
   if (!data) return;
   renderMeta(data);
-  renderSummary(data, opts.onKindSelect);
   updateUnitLabels();
   const flat = flattenTop(data);
   state.lastDeltaNormalizers = buildDeltaNormalizersByKind(flat);
+  const amount = topList(data, "amount", state.kind);
+  const growth = topList(data, "growth", state.kind);
+  const decrease = topList(data, "decrease", state.kind);
 
-  if (state.view === "list") {
-    const amount = topList(data, "amount", state.kind);
-    const growth = topList(data, "growth", state.kind);
-    const decrease = topList(data, "decrease", state.kind);
-
-    /** @type {HTMLElement} */ (document.getElementById("amount")).innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
-    /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth", "growth", "↑", true, "log1p");
-    /** @type {HTMLElement} */ (document.getElementById("decrease")).innerHTML = tableFor(decrease, "decrease", "decrease", "↓", true, "log1p");
-    return;
-  }
-
+  /** @type {HTMLElement} */ (document.getElementById("amount")).innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
+  /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth", "growth", "↑", true, "log1p");
+  /** @type {HTMLElement} */ (document.getElementById("decrease")).innerHTML = tableFor(decrease, "decrease", "decrease", "↓", true, "log1p");
   renderHeatmap(flat);
 }

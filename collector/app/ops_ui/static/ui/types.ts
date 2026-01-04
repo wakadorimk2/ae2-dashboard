@@ -1,6 +1,5 @@
 export type Kind = "item" | "fluid" | "gas";
 export type KindKey = "items" | "fluids" | "gases";
-export type ViewMode = "heatmap" | "list";
 export type HeatmapCount = 40 | 80 | 120;
 export type Metric = "amount" | "growth" | "decrease";
 
