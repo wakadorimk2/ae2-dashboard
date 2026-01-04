@@ -6,8 +6,9 @@ import { formatValue, unitFor } from "./format.js";
 import { toPerMinute } from "./scale_bridge.js";
 import { DELTA_UNIT, state } from "./state.js";
 
-/** @typedef {{ raw_name: string, display_name: string, amount: number, growth: number, decrease: number, net: number }} FlatEntry */
-/** @typedef {{ raw: string, name: string, amount: number, delta: number, entry: FlatEntry }} HeatEntry */
+/** @typedef {import("./types.ts").UiTopFlatEntry} UiTopFlatEntry */
+/** @typedef {import("./types.ts").UiTopFlat} UiTopFlat */
+/** @typedef {import("./types.ts").UiHeatmapEntry} UiHeatmapEntry */
 
 const HEATMAP_EPS = 0.02;
 
@@ -32,8 +33,8 @@ function clamp(value, min, max) {
 }
 
 /**
- * @param {FlatEntry} entry
- * @returns {HeatEntry | null}
+ * @param {UiTopFlatEntry} entry
+ * @returns {UiHeatmapEntry | null}
  */
 function coerceEntry(entry) {
   if (!entry || typeof entry !== "object") return null;
@@ -60,10 +61,10 @@ function colorForDelta(deltaNorm) {
 }
 
 /**
- * @param {Array<{ weight: number, item: HeatEntry }>} items
+ * @param {Array<{ weight: number, item: UiHeatmapEntry }>} items
  * @param {number} width
  * @param {number} height
- * @returns {Array<{ x: number, y: number, w: number, h: number, item: HeatEntry }>}
+ * @returns {Array<{ x: number, y: number, w: number, h: number, item: UiHeatmapEntry }>}
  */
 export function buildTreemap(items, width, height) {
   const w = toNumber(width, 0);
@@ -85,7 +86,7 @@ export function buildTreemap(items, width, height) {
   }));
   nodes.sort((a, b) => b.area - a.area);
 
-  /** @type {Array<{ x: number, y: number, w: number, h: number, item: HeatEntry }>} */
+  /** @type {Array<{ x: number, y: number, w: number, h: number, item: UiHeatmapEntry }>} */
   const tiles = [];
   let rect = { x: 0, y: 0, w, h };
 
@@ -111,7 +112,7 @@ export function buildTreemap(items, width, height) {
   }
 
   /**
-   * @param {Array<{ area: number, item: HeatEntry }>} row
+   * @param {Array<{ area: number, item: UiHeatmapEntry }>} row
    */
   function layoutRow(row) {
     let sum = 0;
@@ -139,7 +140,7 @@ export function buildTreemap(items, width, height) {
     }
   }
 
-  /** @type {Array<{ area: number, item: HeatEntry }>} */
+  /** @type {Array<{ area: number, item: UiHeatmapEntry }>} */
   let row = [];
   const remaining = nodes.slice();
   while (remaining.length > 0) {
@@ -159,8 +160,8 @@ export function buildTreemap(items, width, height) {
 }
 
 /**
- * @param {HeatEntry[]} list
- * @returns {HeatEntry[]}
+ * @param {UiHeatmapEntry[]} list
+ * @returns {UiHeatmapEntry[]}
  */
 function selectHeatmapEntries(list) {
   const entries = Array.isArray(list) ? list.slice() : [];
@@ -177,7 +178,7 @@ function selectHeatmapEntries(list) {
 }
 
 /**
- * @param {{ item: FlatEntry[], fluid: FlatEntry[], gas: FlatEntry[] }} flat
+ * @param {UiTopFlat} flat
  */
 export function renderHeatmap(flat) {
   const canvas = /** @type {HTMLElement | null} */ (document.getElementById("heatmapCanvas"));
@@ -186,7 +187,7 @@ export function renderHeatmap(flat) {
 
   const baseList = flat?.[state.kind] || [];
   const entries = baseList.map(coerceEntry).filter((entry) => entry);
-  const list = selectHeatmapEntries(/** @type {HeatEntry[]} */ (entries));
+  const list = selectHeatmapEntries(/** @type {UiHeatmapEntry[]} */ (entries));
 
   canvas.innerHTML = "";
   if (list.length === 0) {

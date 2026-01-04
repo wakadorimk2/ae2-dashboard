@@ -5,21 +5,15 @@ import { getIconUrl } from "./icons.js";
 import { fmtRaw, formatValue, prettyName, unitFor } from "./format.js";
 import { renderHeatmap } from "./heatmap.js";
 import { applyMinRatio01, buildListNormalizer, toPerMinute } from "./scale_bridge.js";
+import { KINDS, kindToKey } from "./kind.js";
 import { BAR_MIN_RATIO, DELTA_UNIT, state } from "./state.js";
 
 /** @typedef {import("./types.ts").Entry} Entry */
 /** @typedef {import("./types.ts").DashboardData} DashboardData */
 /** @typedef {import("./types.ts").Kind} Kind */
-/** @typedef {import("./types.ts").KindKey} KindKey */
 /** @typedef {import("./types.ts").Metric} Metric */
-
-/**
- * @param {Kind} kind
- * @returns {KindKey}
- */
-function kindToKey(kind) {
-  return kind === "fluid" ? "fluids" : (kind === "gas" ? "gases" : "items");
-}
+/** @typedef {import("./types.ts").UiTopFlat} UiTopFlat */
+/** @typedef {import("./types.ts").UiTopFlatEntry} UiTopFlatEntry */
 
 /**
  * @param {Entry[]} list
@@ -33,12 +27,9 @@ function kindToKey(kind) {
 function tableFor(list, valueKey, metricClass, arrow, isRate, compressMethod) {
   if (!Array.isArray(list) || list.length === 0) return `<div class="muted">（データなし）</div>`;
 
-  const perHourEl = /** @type {HTMLInputElement | null} */ (document.getElementById("perHour"));
-  const perHour = perHourEl?.checked;
-  const displayScale = isRate && perHour ? 60 : 1;
-
   const baseValues = list.map(x => (x && typeof x[valueKey] === "number") ? x[valueKey] : 0);
-  const displayValues = baseValues.map(v => v * displayScale);
+  // NOTE: /hour toggle removed; keep /min fixed to avoid DOM dependency.
+  const displayValues = baseValues;
   const method = compressMethod === "sqrt" ? "sqrt" : "log1p";
   const normalizer = buildListNormalizer(baseValues, method);
   const unit = unitFor(state.kind);
@@ -75,7 +66,7 @@ function tableFor(list, valueKey, metricClass, arrow, isRate, compressMethod) {
     `;
   }).join("");
 
-  const perLabel = isRate ? (perHour ? "/hour" : "/min") : "";
+  const perLabel = isRate ? "/min" : "";
   return `
     <table>
       <thead><tr><th>name</th><th style="width:70%;">value ${perLabel}</th></tr></thead>
@@ -125,10 +116,10 @@ export function renderMeta(data) {
 
 /**
  * @param {DashboardData} data
- * @returns {{ item: Array<{ raw_name: string, display_name: string, amount: number, growth: number, decrease: number, net: number }>, fluid: Array<{ raw_name: string, display_name: string, amount: number, growth: number, decrease: number, net: number }>, gas: Array<{ raw_name: string, display_name: string, amount: number, growth: number, decrease: number, net: number }> }}
+ * @returns {UiTopFlat}
  */
 export function flattenTop(data) {
-  const kinds = /** @type {Kind[]} */ (["item", "fluid", "gas"]);
+  const kinds = KINDS;
   const out = { item: [], fluid: [], gas: [] };
   const metrics = [
     { key: "amount", field: "amount" },
@@ -167,7 +158,7 @@ export function flattenTop(data) {
 }
 
 /**
- * @param {{ item: Array<{ growth: number, decrease: number }>, fluid: Array<{ growth: number, decrease: number }>, gas: Array<{ growth: number, decrease: number }> }} flat
+ * @param {UiTopFlat} flat
  * @returns {{ item: unknown, fluid: unknown, gas: unknown } | null}
  */
 export function buildDeltaNormalizersByKind(flat) {

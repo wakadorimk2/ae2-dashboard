@@ -2,6 +2,8 @@
 
 import { kindUnit, state } from "./state.js";
 
+/** @typedef {import("./types.ts").Kind} Kind */
+
 /**
  * @param {unknown} n
  * @returns {string}
@@ -79,7 +81,7 @@ export function prettyName(name) {
 }
 
 /**
- * @param {string} kind
+ * @param {Kind} kind
  * @returns {string}
  */
 export function unitFor(kind) {
@@ -92,8 +94,6 @@ export function unitFor(kind) {
  */
 export function scaleValue(n) {
   if (typeof n !== "number") return 0;
-  const perHourEl = /** @type {HTMLInputElement | null} */ (document.getElementById("perHour"));
-  const perHour = perHourEl?.checked;
-  const scale = perHour ? 60 : 1;
-  return n * scale;
+  // NOTE: /hour toggle removed; keep /min fixed to avoid DOM dependency.
+  return n;
 }

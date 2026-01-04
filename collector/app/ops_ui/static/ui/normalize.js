@@ -1,5 +1,7 @@
 // @ts-check
 
+import { KINDS, kindToKey } from "./kind.js";
+
 /**
  * Normalize `/dashboard` response into the UI DashboardData shape.
  *
@@ -30,7 +32,7 @@ function normalizeTop(rawTop) {
     const rawMetric = pickMetric(top, metric);
     /** @type {import("./types.ts").TopByKind} */
     const byKind = {};
-    for (const kind of ["item", "fluid", "gas"]) {
+    for (const kind of KINDS) {
       const kindKey = kindToKey(kind);
       const list = normalizeList(rawMetric?.[kind] ?? rawMetric?.[kindKey], metric);
       byKind[kindKey] = list;
@@ -112,12 +114,4 @@ function pickString(value) {
  */
 function pickNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-/**
- * @param {import("./types.ts").Kind} kind
- * @returns {import("./types.ts").KindKey}
- */
-function kindToKey(kind) {
-  return kind === "fluid" ? "fluids" : (kind === "gas" ? "gases" : "items");
 }
