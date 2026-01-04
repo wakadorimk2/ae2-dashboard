@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import argparse
 import math
 from dataclasses import dataclass
@@ -8,6 +9,10 @@ from typing import Dict, List, Tuple, Optional
 
 import yaml
 import networkx as nx
+
+import json
+from collections import defaultdict, deque
+from statistics import pstdev
 
 
 # ----------------------------
@@ -50,7 +55,7 @@ def build_graph(groups_yaml: Path, edges_yaml: Path) -> Tuple[nx.DiGraph, Dict[s
 
 
 # ----------------------------
-# Stats loading (stub)
+# Stats loading
 # ----------------------------
 
 def demo_stats(G: nx.DiGraph) -> Dict[str, NodeStats]:
@@ -88,6 +93,172 @@ def demo_stats(G: nx.DiGraph) -> Dict[str, NodeStats]:
 
     return stats
 
+def iter_jsonl_files(jsonl_dir: Path, pattern: str, max_files: int) -> list[Path]:
+    paths = [Path(p) for p in glob.glob(str(jsonl_dir / pattern))]
+    # sort by mtime as a reasonable proxy; ts sort happens after parsing
+    paths.sort(key=lambda p: p.stat().st_mtime)
+    if max_files and len(paths) > max_files:
+        paths = paths[-max_files:]
+    return paths
+
+def load_snapshots_from_files(
+    files: list[Path],
+    source: str | None = None,
+) -> list[tuple[float, dict[str, float]]]:
+    snapshots: list[tuple[float, dict[str, float]]] = []
+    for fp in files:
+        # each file has 1 line (your case), but support multi-line just in case
+        with fp.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parsed = parse_snapshot(line, source=source)
+                if parsed is not None:
+                    snapshots.append(parsed)
+
+    snapshots.sort(key=lambda x: x[0])  # by ts
+    return snapshots
+
+def iter_last_n_lines(path: Path, n: int):
+    """
+    Simple: read file and keep last n lines.
+    For huge files, you can optimize later.
+    """
+    buf = deque(maxlen=n)
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                buf.append(line)
+    for line in buf:
+        yield line
+
+def parse_snapshot(line: str, source: str | None = None) -> tuple[float, dict[str, float]] | None:
+    """
+    Returns (ts, {fingerprint: amount_sum}) for one jsonl record.
+    """
+    obj = json.loads(line)
+    if source is not None and obj.get("source") != source:
+        return None
+
+    ts = float(obj["ts"])
+    fp_amount: dict[str, float] = defaultdict(float)
+
+    for e in obj.get("entries", []) or []:
+        fp = e.get("fingerprint")
+        amt = e.get("amount")
+        if fp is None or amt is None:
+            continue
+        # amount could be int/float; sum duplicates
+        fp_amount[fp] += float(amt)
+
+    return ts, dict(fp_amount)
+
+def group_amount_from_snapshot(group_def: dict, fp_amount: dict[str, float]) -> float:
+    members = (group_def.get("members") or {})
+    fps = members.get("fingerprints") or []
+    total = 0.0
+    for fp in fps:
+        total += fp_amount.get(fp, 0.0)
+    return total
+
+def compute_rate_per_min(times, values):
+    if len(times) < 3:
+        return 0.0
+    t_last = times[-1]
+    v_last = values[-1]
+    prev_vals = values[:-1]
+    v_base = sum(prev_vals) / len(prev_vals)
+    dt = t_last - times[0]
+    if dt <= 0:
+        return 0.0
+    return (v_last - v_base) / (dt / 60.0)
+
+
+def compute_short_volatility(times: list[float], values: list[float]) -> float:
+    """
+    Volatility = stddev of per-interval rate (per minute).
+    """
+    if len(times) < 3:
+        return 0.0
+    rates = []
+    for i in range(1, len(times)):
+        dt = times[i] - times[i - 1]
+        if dt <= 0:
+            continue
+        rates.append((values[i] - values[i - 1]) / (dt / 60.0))
+    if len(rates) < 2:
+        return 0.0
+    return float(pstdev(rates))
+
+def build_stats_from_snapshots(
+    G: nx.DiGraph,
+    groups_doc: dict,
+    snapshots: list[tuple[float, dict[str, float]]],
+    short_minutes: float,
+    mid_minutes: float,
+) -> dict[str, NodeStats]:
+    if len(snapshots) < 2:
+        raise ValueError(f"Not enough snapshots (need >=2). Got {len(snapshots)}.")
+
+    # (以下は今の build_stats_from_jsonl と同じ)
+    ts_now = snapshots[-1][0]
+
+    def windowed(minutes: float):
+        t_min = ts_now - minutes * 60.0
+        return [(t, m) for (t, m) in snapshots if t >= t_min]
+
+    short_snaps = windowed(short_minutes)
+    mid_snaps = windowed(mid_minutes)
+
+    groups_by_id = {g["id"]: g for g in groups_doc.get("groups", [])}
+
+    stats: dict[str, NodeStats] = {}
+    for node in G.nodes:
+        gdef = groups_by_id.get(node, {"id": node, "members": {"fingerprints": []}})
+
+        def series(snaps):
+            t_list = []
+            v_list = []
+            last_val = None
+
+            for t, fp_amount in snaps:
+                # 現snapshotにメンバーが1つでも載ってるか
+                members = (gdef.get("members") or {}).get("fingerprints") or []
+                present = any(fp in fp_amount for fp in members)
+
+                if present:
+                    val = group_amount_from_snapshot(gdef, fp_amount)
+                    last_val = val
+                else:
+                    # 欠損なら前回値を維持（前回が無ければスキップでもOK）
+                    if last_val is None:
+                        continue
+                    val = last_val
+
+                t_list.append(t)
+                v_list.append(val)
+
+            return t_list, v_list
+
+        t_s, v_s = series(short_snaps)
+        t_m, v_m = series(mid_snaps)
+
+        amount_now = v_s[-1] if v_s else 0.0
+        rate_short = compute_rate_per_min(t_s, v_s) if len(t_s) >= 2 else 0.0
+        rate_mid = compute_rate_per_min(t_m, v_m) if len(t_m) >= 2 else 0.0
+        vol = compute_short_volatility(t_s, v_s) if len(t_s) >= 3 else 0.0
+
+        stats[node] = NodeStats(
+            amount=amount_now,
+            rate_short=rate_short,
+            rate_mid=rate_mid,
+            volatility=vol,
+            capacity=None,
+        )
+
+    return stats
 
 # ----------------------------
 # Scoring
@@ -157,6 +328,16 @@ def main() -> None:
     ap.add_argument("--edges", type=str, default="edges.yaml")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--use-demo", action="store_true", help="Use synthetic stats")
+    ap.add_argument("--jsonl", type=str, default=None, help="Path to ingest jsonl")
+    ap.add_argument("--source", type=str, default=None, help="Filter jsonl records by source")
+    ap.add_argument("--max-lines", type=int, default=200, help="Read last N jsonl lines")
+    ap.add_argument("--short-min", type=float, default=10.0)
+    ap.add_argument("--mid-min", type=float, default=60.0)
+    ap.add_argument("--jsonl-dir", type=str, default=None)
+    ap.add_argument("--glob", type=str, default="*.jsonl")
+    ap.add_argument("--max-files", type=int, default=300)
+    ap.add_argument("--debug", action="store_true")
+    ap.add_argument("--debug-nodes", type=str, default="hydrogen_out,chlorine_out,sulfuric_acid_out,hcl_out")
     args = ap.parse_args()
 
     G, groups = build_graph(Path(args.groups), Path(args.edges))
@@ -180,12 +361,62 @@ def main() -> None:
         print(f"  - {n:20s} | {label}")
 
     # 3) Stats
+    groups_doc = load_yaml(Path(args.groups))
+    groups_by_id = {g["id"]: g for g in groups_doc.get("groups", [])}
+
     if args.use_demo:
         stats = demo_stats(G)
+    elif args.jsonl_dir:
+        files = iter_jsonl_files(Path(args.jsonl_dir), args.glob, args.max_files)
+        snapshots = load_snapshots_from_files(files, source=args.source)
+        stats = build_stats_from_snapshots(
+            G=G,
+            groups_doc=groups_doc,
+            snapshots=snapshots,
+            short_minutes=args.short_min,
+            mid_minutes=args.mid_min,
+        )
+    elif args.jsonl:
+        # 既存の単一ファイル対応も残すならここで snapshots にしてから呼ぶ
+        snapshots = []
+        for line in iter_last_n_lines(Path(args.jsonl), args.max_lines):
+            parsed = parse_snapshot(line, source=args.source)
+            if parsed is not None:
+                snapshots.append(parsed)
+        snapshots.sort(key=lambda x: x[0])
+        stats = build_stats_from_snapshots(G, groups_doc, snapshots, args.short_min, args.mid_min)
     else:
-        # Placeholder: integrate your real metrics here
-        # Expect a json mapping node_id -> NodeStats fields, etc.
-        raise SystemExit("Provide real stats loader or run with --use-demo")
+        raise SystemExit("Run with --use-demo or provide --jsonl / --jsonl-dir.")
+    
+    
+    # ----------------------------
+    # Helpers
+    # ----------------------------
+    def is_observed(node_id: str) -> bool:
+        return node_id.endswith("_out")  # まずはこれでOK
+
+    def has_members(node_id: str) -> bool:
+        gdef = groups_by_id.get(node_id)
+        if not gdef:
+            return False
+        fps = (gdef.get("members") or {}).get("fingerprints") or []
+        return len(fps) > 0
+
+    def tag_for_edge(u: str, v: str, sv: NodeStats) -> str:
+        # 下流が工程っぽくて、観測できてないなら「未着手」扱い
+        if (not is_observed(v)) and (not has_members(v)) and sv.amount == 0:
+            return "NEW"
+        return "IMBAL"
+
+    if args.debug:
+        print("\n[Debug: NodeStats]")
+        for n in [x.strip() for x in args.debug_nodes.split(",") if x.strip()]:
+            st = stats.get(n)
+            if not st:
+                print(f"  - {n}: (missing)")
+                continue
+            label = G.nodes[n].get("label", n)
+            print(f"  - {n:20s} | {label:28s} | amount={st.amount:12.2f} | short={st.rate_short:10.4f}/m | mid={st.rate_mid:10.4f}/m | vol={st.volatility:8.4f}")
 
     # Precompute influence: number of downstream nodes
     influence_map: Dict[str, int] = {}
@@ -204,11 +435,14 @@ def main() -> None:
     # B) Mismatch (edge-based)
     mismatch = []
     for u, v in G.edges:
+        if not is_observed(u):
+            continue  # 上流だけ観測点ならOK（下流は工程でもOK）
         su = stats.get(u, NodeStats())
         sv = stats.get(v, NodeStats())
         s = score_mismatch(u, v, su, sv)
+        tag = tag_for_edge(u, v, sv)
         if s > 0:
-            mismatch.append((f"{u} -> {v}", s))
+            mismatch.append((f"[{tag}]{u} -> {v}", s))
     mismatch = top_k(mismatch, args.k)
 
     # C) Expansion
