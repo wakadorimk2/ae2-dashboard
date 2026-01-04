@@ -253,4 +253,4 @@ def dashboard_ui() -> FileResponse:
             status_code=500,
             detail=f"dashboard UI not found: {OPS_UI_INDEX}",
         )
-    return FileResponse(OPS_UI_INDEX)
+    return FileResponse(OPS_UI_INDEX, headers={"Cache-Control": "no-store"})
