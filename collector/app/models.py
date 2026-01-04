@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 from pydantic import BaseModel, Field
 
 class IngestItem(BaseModel):
@@ -12,7 +12,26 @@ class IngestItem(BaseModel):
     )
     extra: Dict[str, Any] = Field(default_factory=dict)
 
+class IngestEntry(BaseModel):
+    kind: Literal["item", "fluid", "gas"] = Field(..., description="item/fluid/gas")
+    raw_name: str = Field(..., description="例: minecraft:stone (prefixなし想定)")
+    amount: Optional[int] = Field(None, ge=0)
+    count: Optional[int] = Field(None, ge=0)
+    display_name: Optional[str] = None
+    nbt_hash: Optional[str] = None
+    fingerprint: Optional[str] = Field(
+        None,
+        description="variants識別用。raw_name + nbt_hash などをCC側で作れればベスト"
+    )
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
 class IngestPayload(BaseModel):
     ts: Optional[float] = Field(None, description="UNIX秒 or ISOでもOK（UNIX推奨）")
     source: Optional[str] = Field(None, description="拠点名/次元/ワールド名など任意")
-    items: List[IngestItem]
+    items: Optional[List[IngestItem]] = None
+    fluids: Optional[List[IngestItem]] = None
+    gases: Optional[List[IngestItem]] = None
+    entries: Optional[List[IngestEntry]] = None
+    job_id: Optional[str] = None
+    seq: Optional[int] = None
+    total: Optional[int] = None

@@ -5,6 +5,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from . import limits, settings
+from .ingest import normalize_ingest_payload
 from .models import IngestPayload
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
 from .summarize import summarize_items, compute_rankings
@@ -29,8 +30,26 @@ def health() -> Dict[str, Any]:
 
 @router.post("/ingest")
 def ingest(payload: IngestPayload) -> Dict[str, Any]:
-    if len(payload.items) > settings.MAX_ITEMS:
-        raise HTTPException(status_code=413, detail=f"too many items: {len(payload.items)} > {settings.MAX_ITEMS}")
+    if payload.entries is None and payload.items is None and payload.fluids is None and payload.gases is None:
+        raise HTTPException(status_code=400, detail="missing body.items or body.entries")
+
+    items, counts, schema = normalize_ingest_payload(payload)
+
+    log = {
+        "type": "ingest_received",
+        "schema": schema,
+        "counts": counts,
+    }
+    if payload.job_id is not None:
+        log["job_id"] = payload.job_id
+    if payload.seq is not None:
+        log["seq"] = payload.seq
+    if payload.total is not None:
+        log["total"] = payload.total
+    print(json.dumps(log, ensure_ascii=False))
+
+    if len(items) > settings.MAX_ITEMS:
+        raise HTTPException(status_code=413, detail=f"too many items: {len(items)} > {settings.MAX_ITEMS}")
 
     if settings.LOG_RAW:
         # 元のmain.pyの挙動と同じ :contentReference[oaicite:2]{index=2}
@@ -41,8 +60,8 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
 
     ts = payload.ts or time.time()
 
-    summary = summarize_items(payload.items)
-    rank_items = payload.items
+    summary = summarize_items(items)
+    rank_items = items
     if len(rank_items) > limits.INGEST_MAX:
         rank_items = rank_items[:limits.INGEST_MAX]
     ranks = compute_rankings(rank_items, ts=ts, top_n=limits.RANKING_MAX, min_amount_for_top=0)
@@ -51,7 +70,7 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
         "gcs_path": gcs_path,
         "ts": ts,
         "source": payload.source,
-        "items_len": len(payload.items),
+        "items_len": len(items),
         "top_n": limits.RANKING_MAX,
         **summary,
         **ranks,
