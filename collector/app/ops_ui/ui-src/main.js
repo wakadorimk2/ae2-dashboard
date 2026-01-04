@@ -1,5 +1,7 @@
 // @ts-check
 
+import "./scale.js";
+import "./styles.css";
 import { loadDisplayNameDict } from "./i18n.js";
 import { loadIconIndex } from "./icons.js";
 import { normalizeDashboardData } from "./normalize.js";
