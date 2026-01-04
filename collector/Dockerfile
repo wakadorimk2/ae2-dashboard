@@ -4,7 +4,8 @@ WORKDIR /app/ops_ui/ui-src
 COPY app/ops_ui/ui-src/package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY app/ops_ui/ui-src ./
-RUN npm run build
+RUN npm run build && ls -la /app/ops_ui/static/ui/dist && ls -la /app/ops_ui/static/ui/dist/assets | head
+
 
 FROM python:3.12-slim
 

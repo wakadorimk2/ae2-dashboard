@@ -15,8 +15,11 @@ fi
 
 : "${GCP_PROJECT:?Error: GCP_PROJECT is not set}"
 : "${SERVICE:?Error: SERVICE is not set}"
-
 REGION="${REGION:-us-west1}"
+
+# App env (adjust keys to match your code)
+: "${GCS_BUCKET:?Error: GCS_BUCKET is not set}"
+: "${GOOGLE_CLOUD_PROJECT:?Error: GOOGLE_CLOUD_PROJECT is not set}"
 
 if ! command -v gcloud >/dev/null 2>&1; then
   echo "Error: gcloud not found. Install the Google Cloud SDK." >&2
@@ -42,6 +45,7 @@ pushd "$SOURCE_DIR" >/dev/null
 gcloud run deploy "$SERVICE" --quiet \
   --source . \
   --region "$REGION" \
+  --set-env-vars "GCS_BUCKET=$GCS_BUCKET,GOOGLE_CLOUD_PROJECT=$GOOGLE_CLOUD_PROJECT" \
   "${ALLOW_FLAG[@]}"
 popd >/dev/null
 

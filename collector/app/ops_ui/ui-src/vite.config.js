@@ -6,7 +6,7 @@ module.exports = defineConfig({
   build: {
     outDir: path.resolve(__dirname, "../static/ui/dist"),
     emptyOutDir: true,
-    manifest: true,
+    manifest: "manifest.json",
     rollupOptions: {
       input: path.resolve(__dirname, "main.js"),
       output: {

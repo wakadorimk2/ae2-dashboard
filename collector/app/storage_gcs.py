@@ -10,8 +10,14 @@ _storage_client = None
 def _get_storage_client():
     global _storage_client
     if _storage_client is None:
-        _storage_client = storage.Client()
+        project = (
+            os.getenv("GOOGLE_CLOUD_PROJECT")
+            or os.getenv("GCP_PROJECT")
+            or os.getenv("PROJECT_ID")
+        )
+        _storage_client = storage.Client(project=project)
     return _storage_client
+
 
 def save_jsonl_to_gcs(payload_dict: Dict[str, Any]) -> Optional[str]:
     if not settings.GCS_BUCKET:
