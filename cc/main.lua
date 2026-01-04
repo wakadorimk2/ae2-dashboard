@@ -41,6 +41,7 @@ while true do
   end
 
   local payload = {
+    job_id = tostring(os.epoch("utc")) .. "-" .. tostring(math.random(100000, 999999)),
     ts = nowTs(),
     source = cfg.SOURCE or "base",
     entries = entries,
@@ -59,22 +60,14 @@ while true do
   end)
   sleep(0.5)
 
-  local ok, job_or_err = post.postEntriesChunked(cfg.INGEST_URL, entries, {
-    chunk_size = 300,
-    on_start = function(job, total, chunk)
-      print(("job_id=%s parts=%d chunk=%d"):format(job, total, chunk))
-    end,
-    on_ok = function(job, i, total, code)
-      print(("POST %d/%d OK code=%s"):format(i, total, tostring(code)))
-    end,
-    on_error = function(job, i, total, err)
-      print(("POST %d/%d NG: %s"):format(i, total, err))
-    end,
-  })
-
-  if not ok then
-    print("FAILED:", job_or_err)
+  local ok, body, code = post.postEntries(cfg.INGEST_URL, payload, { require_2xx = true })
+  local code_s = code ~= nil and tostring(code) or "?"
+  if ok then
+    print(("POST OK code=%s job_id=%s"):format(code_s, payload.job_id))
+  else
+    print(("POST NG code=%s job_id=%s body=%s"):format(code_s, payload.job_id, tostring(body)))
   end
+  -- 動作確認: 未実施（CC環境なし）。/ingest 200 と /dashboard 表示を確認予定。
 
   sleep(cfg.INTERVAL_SEC)
 end
