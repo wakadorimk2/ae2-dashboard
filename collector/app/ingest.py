@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Iterable, List, Optional, Tuple
-from .models import IngestEntry, IngestItem, IngestPayload
+from .models import IngestEntry, IngestItem, IngestPayload, normalize_kind
 
 _KIND_PREFIX = {
     "fluid": "fluid:",
@@ -8,6 +8,7 @@ _KIND_PREFIX = {
 }
 
 def _with_kind_prefix(kind: str, raw_name: str) -> str:
+    kind = normalize_kind(kind)
     prefix = _KIND_PREFIX.get(kind)
     if not prefix:
         return raw_name
@@ -26,7 +27,7 @@ def entries_to_items(entries: Iterable[IngestEntry]) -> Tuple[List[IngestItem], 
     items: List[IngestItem] = []
     counts = {"item": 0, "fluid": 0, "gas": 0}
     for entry in entries:
-        kind = entry.kind
+        kind = normalize_kind(entry.kind)
         raw_name = _with_kind_prefix(kind, entry.raw_name)
         items.append(IngestItem(
             raw_name=raw_name,

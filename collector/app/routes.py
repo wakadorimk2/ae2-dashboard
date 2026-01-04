@@ -47,6 +47,14 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     if payload.total is not None:
         log["total"] = payload.total
     print(json.dumps(log, ensure_ascii=False))
+    print(
+        "counts: item=%s fluid=%s gas=%s"
+        % (
+            counts.get("items", 0),
+            counts.get("fluids", 0),
+            counts.get("gases", 0),
+        )
+    )
 
     if len(items) > settings.MAX_ITEMS:
         raise HTTPException(status_code=413, detail=f"too many items: {len(items)} > {settings.MAX_ITEMS}")

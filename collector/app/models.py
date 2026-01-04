@@ -1,5 +1,20 @@
 from typing import Any, Dict, List, Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+_KIND_NORMALIZE = {
+    "item": "item",
+    "items": "item",
+    "fluid": "fluid",
+    "fluids": "fluid",
+    "gas": "gas",
+    "gases": "gas",
+}
+
+def normalize_kind(value: Any) -> Any:
+    if isinstance(value, str):
+        key = value.lower()
+        return _KIND_NORMALIZE.get(key, value)
+    return value
 
 class IngestItem(BaseModel):
     raw_name: str = Field(..., description="例: minecraft:stone / ae2:certus_quartz_crystal")
@@ -24,6 +39,11 @@ class IngestEntry(BaseModel):
         description="variants識別用。raw_name + nbt_hash などをCC側で作れればベスト"
     )
     extra: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _normalize_kind(cls, value: Any) -> Any:
+        return normalize_kind(value)
 
 class IngestPayload(BaseModel):
     ts: Optional[float] = Field(None, description="UNIX秒 or ISOでもOK（UNIX推奨）")

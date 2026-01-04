@@ -52,6 +52,8 @@ while true do
     #items, #fluids, #gases, #items + #fluids + #gases
   ))
 
+  print(textutils.serializeJSON(payload))
+
   print("checkURL:", http.checkURL(cfg.INGEST_URL))
 
   pcall(function() -- POST前に軽く叩いてインスタンス起こす
@@ -67,7 +69,6 @@ while true do
   else
     print(("POST NG code=%s job_id=%s body=%s"):format(code_s, payload.job_id, tostring(body)))
   end
-  -- 動作確認: 未実施（CC環境なし）。/ingest 200 と /dashboard 表示を確認予定。
 
   sleep(cfg.INTERVAL_SEC)
 end
