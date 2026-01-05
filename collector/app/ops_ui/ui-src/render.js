@@ -8,16 +8,16 @@ import { applyMinRatio01, buildListNormalizer, toPerMinute } from "./scale_bridg
 import { KINDS, kindToKey } from "./kind.js";
 import { BAR_MIN_RATIO, DELTA_UNIT, state } from "./state.js";
 
-/** @typedef {import("./types.ts").Entry} Entry */
-/** @typedef {import("./types.ts").DashboardData} DashboardData */
-/** @typedef {import("./types.ts").Kind} Kind */
-/** @typedef {import("./types.ts").Metric} Metric */
-/** @typedef {import("./types.ts").UiTopFlat} UiTopFlat */
-/** @typedef {import("./types.ts").UiTopFlatEntry} UiTopFlatEntry */
+/** @typedef {import("./types.js").EntryUi} EntryUi */
+/** @typedef {import("./types.js").DashboardData} DashboardData */
+/** @typedef {import("./types.js").Kind} Kind */
+/** @typedef {import("./types.js").TopMetric} TopMetric */
+/** @typedef {import("./types.js").UiTopFlat} UiTopFlat */
+/** @typedef {import("./types.js").UiTopFlatEntry} UiTopFlatEntry */
 
 /**
- * @param {Entry[]} list
- * @param {Metric} valueKey
+ * @param {EntryUi[]} list
+ * @param {TopMetric} valueKey
  * @param {string} metricClass
  * @param {string} arrow
  * @param {boolean} isRate
@@ -77,9 +77,9 @@ function tableFor(list, valueKey, metricClass, arrow, isRate, compressMethod) {
 
 /**
  * @param {DashboardData} data
- * @param {Metric} metric
+ * @param {TopMetric} metric
  * @param {Kind} kind
- * @returns {Entry[]}
+ * @returns {EntryUi[]}
  */
 function topList(data, metric, kind) {
   const kindKey = kindToKey(kind);
@@ -180,12 +180,9 @@ export function buildDeltaNormalizersByKind(flat) {
 /**
  * @param {DashboardData} data
  */
-export function render(data) {
+export function renderTable(data) {
   if (!data) return;
-  renderMeta(data);
   updateUnitLabels();
-  const flat = flattenTop(data);
-  state.lastDeltaNormalizers = buildDeltaNormalizersByKind(flat);
   const amount = topList(data, "amount", state.kind);
   const growth = topList(data, "growth", state.kind);
   const decrease = topList(data, "decrease", state.kind);
@@ -193,5 +190,14 @@ export function render(data) {
   /** @type {HTMLElement} */ (document.getElementById("amount")).innerHTML = tableFor(amount, "amount", "amount", "", false, "log1p");
   /** @type {HTMLElement} */ (document.getElementById("growth")).innerHTML = tableFor(growth, "growth", "growth", "↑", true, "log1p");
   /** @type {HTMLElement} */ (document.getElementById("decrease")).innerHTML = tableFor(decrease, "decrease", "decrease", "↓", true, "log1p");
+}
+
+/**
+ * @param {DashboardData} data
+ */
+export function renderHeatmapView(data) {
+  if (!data) return;
+  const flat = flattenTop(data);
+  state.lastDeltaNormalizers = buildDeltaNormalizersByKind(flat);
   renderHeatmap(flat);
 }

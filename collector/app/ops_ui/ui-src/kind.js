@@ -5,8 +5,8 @@
  */
 
 /**
- * @typedef {import("./types.ts").Kind} Kind
- * @typedef {import("./types.ts").KindKey} KindKey
+ * @typedef {import("./types.js").Kind} Kind
+ * @typedef {import("./types.js").KindKey} KindKey
  */
 
 /** @type {Kind[]} */

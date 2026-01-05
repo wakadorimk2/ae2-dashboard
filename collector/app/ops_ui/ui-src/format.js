@@ -2,7 +2,7 @@
 
 import { kindUnit, state } from "./state.js";
 
-/** @typedef {import("./types.ts").Kind} Kind */
+/** @typedef {import("./types.js").Kind} Kind */
 
 /**
  * @param {unknown} n

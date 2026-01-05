@@ -37,6 +37,10 @@
     <div class="title">AE2 Dashboard</div>
     <span class="pill meta" id="meta">loading…</span>
     <div class="right">
+      <nav class="segmented view-toggle" id="viewToggle" aria-label="View">
+        <a class="seg-btn" data-view="heatmap" href="?view=heatmap">Heatmap</a>
+        <a class="seg-btn" data-view="list" href="?view=list">List</a>
+      </nav>
       <div class="segmented" id="kindToggle">
         <button class="seg-btn active" data-kind="item">Items</button>
         <button class="seg-btn" data-kind="fluid">Fluids</button>
@@ -54,7 +58,7 @@
       <div class="muted heatmap-empty" id="heatmapEmpty">No data.</div>
     </div>
 
-    <div id="viewList" class="list-section">
+    <div id="viewList" class="list-section is-hidden">
       <div class="grid">
         <div class="card">
           <h2>Amount <span class="unit" id="unit-amount"></span></h2>

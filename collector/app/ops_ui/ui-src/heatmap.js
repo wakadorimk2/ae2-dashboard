@@ -6,9 +6,9 @@ import { formatValue, unitFor } from "./format.js";
 import { toPerMinute } from "./scale_bridge.js";
 import { DELTA_UNIT, state } from "./state.js";
 
-/** @typedef {import("./types.ts").UiTopFlatEntry} UiTopFlatEntry */
-/** @typedef {import("./types.ts").UiTopFlat} UiTopFlat */
-/** @typedef {import("./types.ts").UiHeatmapEntry} UiHeatmapEntry */
+/** @typedef {import("./types.js").UiTopFlatEntry} UiTopFlatEntry */
+/** @typedef {import("./types.js").UiTopFlat} UiTopFlat */
+/** @typedef {import("./types.js").UiHeatmapEntry} UiHeatmapEntry */
 
 const HEATMAP_EPS = 0.02;
 

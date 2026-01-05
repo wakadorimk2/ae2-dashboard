@@ -1,14 +1,14 @@
 // @ts-check
 
 /**
- * @typedef {import("./types.ts").Kind} Kind
+ * @typedef {import("./types.js").Kind} Kind
  */
 // NOTE: UI uses singular kind values; DashboardData uses plural kind keys.
 /**
  * @typedef {"raw"|"compact"} FormatMode
- * @typedef {import("./types.ts").HeatmapCount} HeatmapCount
+ * @typedef {import("./types.js").HeatmapCount} HeatmapCount
  * @typedef {"amount"|"delta"} HeatmapSort
- * @typedef {import("./types.ts").DashboardData} DashboardData
+ * @typedef {import("./types.js").DashboardData} DashboardData
  * @typedef {{ kind: Kind, heatmapCount: HeatmapCount, heatmapSort: HeatmapSort, lastData?: DashboardData }} UIState
  */
 

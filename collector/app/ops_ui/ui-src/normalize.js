@@ -2,16 +2,24 @@
 
 import { KINDS, kindToKey } from "./kind.js";
 
+/** @typedef {import("./types.js").DashboardResponse} DashboardResponse */
+/** @typedef {import("./types.js").DashboardData} DashboardData */
+/** @typedef {import("./types.js").DashboardTop} DashboardTop */
+/** @typedef {import("./types.js").TopByKind} TopByKind */
+/** @typedef {import("./types.js").TopMetric} TopMetric */
+/** @typedef {import("./types.js").EntryRaw} EntryRaw */
+/** @typedef {import("./types.js").EntryUi} EntryUi */
+
 /**
  * Normalize `/dashboard` response into the UI DashboardData shape.
  *
- * @param {unknown} raw
- * @returns {import("./types.ts").DashboardData}
+ * @param {DashboardResponse | null | undefined} raw
+ * @returns {DashboardData}
  */
 export function normalizeDashboardData(raw) {
   const data = (raw && typeof raw === "object") ? /** @type {Record<string, unknown>} */ (raw) : {};
   const top = normalizeTop(data.top);
-  /** @type {import("./types.ts").DashboardData} */
+  /** @type {DashboardData} */
   const out = {};
   if (top) out.top = top;
   if (typeof data.source === "string") out.source = data.source;
@@ -21,16 +29,18 @@ export function normalizeDashboardData(raw) {
 
 /**
  * @param {unknown} rawTop
- * @returns {import("./types.ts").DashboardTop | undefined}
+ * @returns {DashboardTop | undefined}
  */
 function normalizeTop(rawTop) {
   if (!rawTop || typeof rawTop !== "object") return undefined;
   const top = /** @type {Record<string, unknown>} */ (rawTop);
-  /** @type {import("./types.ts").DashboardTop} */
+  /** @type {DashboardTop} */
   const out = {};
-  for (const metric of ["amount", "growth", "decrease"]) {
+  /** @type {TopMetric[]} */
+  const metrics = ["amount", "growth", "decrease"];
+  for (const metric of metrics) {
     const rawMetric = pickMetric(top, metric);
-    /** @type {import("./types.ts").TopByKind} */
+    /** @type {TopByKind} */
     const byKind = {};
     for (const kind of KINDS) {
       const kindKey = kindToKey(kind);
@@ -44,7 +54,7 @@ function normalizeTop(rawTop) {
 
 /**
  * @param {Record<string, unknown>} top
- * @param {import("./types.ts").Metric} metric
+ * @param {TopMetric} metric
  * @returns {Record<string, unknown>}
  */
 function pickMetric(top, metric) {
@@ -56,9 +66,9 @@ function pickMetric(top, metric) {
 }
 
 /**
- * @param {unknown} list
- * @param {import("./types.ts").Metric} metric
- * @returns {import("./types.ts").Entry[]}
+ * @param {EntryRaw[] | null | undefined} list
+ * @param {TopMetric} metric
+ * @returns {EntryUi[]}
  */
 function normalizeList(list, metric) {
   if (!Array.isArray(list)) return [];
@@ -68,9 +78,9 @@ function normalizeList(list, metric) {
 }
 
 /**
- * @param {unknown} entry
- * @param {import("./types.ts").Metric} metric
- * @returns {import("./types.ts").Entry | null}
+ * @param {EntryRaw | null | undefined} entry
+ * @param {TopMetric} metric
+ * @returns {EntryUi | null}
  */
 function normalizeEntry(entry, metric) {
   if (!entry || typeof entry !== "object") return null;
@@ -84,7 +94,7 @@ function normalizeEntry(entry, metric) {
   const value = pickNumber(obj[metric])
     ?? pickNumber(obj[metric === "growth" ? "growth_per_min" : (metric === "decrease" ? "decrease_per_min" : "amount")])
     ?? 0;
-  /** @type {import("./types.ts").Entry} */
+  /** @type {EntryUi} */
   const out = {
     id: rawName,
     name: displayName,

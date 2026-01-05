@@ -5,7 +5,7 @@ import "./styles.css";
 import { loadDisplayNameDict } from "./i18n.js";
 import { loadIconIndex } from "./icons.js";
 import { normalizeDashboardData } from "./normalize.js";
-import { render, updateKindToggle } from "./render.js";
+import { renderHeatmapView, renderMeta, renderTable, updateKindToggle } from "./render.js";
 import { state, TOP_N } from "./state.js";
 
 /**
@@ -23,24 +23,82 @@ function setErr(msg) {
 }
 
 /**
- * @param {import("./types.ts").Kind} kind
+ * @typedef {"heatmap" | "list"} ViewMode
+ */
+
+const VIEW_HEATMAP = "heatmap";
+const VIEW_LIST = "list";
+
+/**
+ * @returns {ViewMode}
+ */
+function getViewFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const viewParam = params.get("view");
+  if (viewParam === VIEW_LIST) return VIEW_LIST;
+  if (viewParam === VIEW_HEATMAP) return VIEW_HEATMAP;
+  const hash = window.location.hash.replace("#", "");
+  if (hash === VIEW_LIST || hash === VIEW_HEATMAP) return /** @type {ViewMode} */ (hash);
+  return VIEW_HEATMAP;
+}
+
+/**
+ * @param {ViewMode} view
+ */
+function updateViewToggle(view) {
+  document.querySelectorAll("#viewToggle .seg-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === view);
+  });
+}
+
+/**
+ * @param {ViewMode} view
+ */
+function applyView(view) {
+  const heatmap = /** @type {HTMLElement | null} */ (document.getElementById("viewHeatmap"));
+  const list = /** @type {HTMLElement | null} */ (document.getElementById("viewList"));
+  const isHeatmap = view === VIEW_HEATMAP;
+  if (heatmap) heatmap.classList.toggle("is-hidden", !isHeatmap);
+  if (list) list.classList.toggle("is-hidden", isHeatmap);
+  updateViewToggle(view);
+}
+
+let currentView = getViewFromUrl();
+
+/**
+ * @param {import("./types.js").DashboardData | undefined} data
+ */
+function renderForView(data) {
+  if (!data) return;
+  renderMeta(data);
+  if (currentView === VIEW_LIST) {
+    renderTable(data);
+  } else {
+    renderHeatmapView(data);
+  }
+}
+
+/**
+ * @param {import("./types.js").Kind} kind
  */
 function onKindSelect(kind) {
   state.kind = kind;
   updateKindToggle();
   if (state.lastData) {
-    renderWithHandlers(state.lastData);
+    renderForView(state.lastData);
     return;
   }
   load();
 }
 
 /**
- * @param {import("./types.ts").DashboardData | undefined} data
+ * @param {ViewMode} nextView
  */
-function renderWithHandlers(data) {
-  if (!data) return;
-  render(data);
+function setView(nextView) {
+  if (nextView === currentView) return;
+  currentView = nextView;
+  applyView(currentView);
+  if (state.lastData) renderForView(state.lastData);
 }
 
 export async function load() {
@@ -60,7 +118,7 @@ export async function load() {
   }
 
   state.lastData = data;
-  renderWithHandlers(data);
+  renderForView(data);
 }
 
 /**
@@ -76,7 +134,7 @@ export function setAuto(on) {
 
 document.querySelectorAll("#kindToggle .seg-btn").forEach(btn => {
   btn.addEventListener("click", () => {
-    const kind = /** @type {import("./types.ts").Kind} */ (btn.dataset.kind);
+    const kind = /** @type {import("./types.js").Kind} */ (btn.dataset.kind);
     if (!kind) return;
     if (kind === state.kind) return;
     onKindSelect(kind);
@@ -84,18 +142,20 @@ document.querySelectorAll("#kindToggle .seg-btn").forEach(btn => {
 });
 
 updateKindToggle();
+applyView(currentView);
+window.addEventListener("hashchange", () => setView(getViewFromUrl()));
+window.addEventListener("popstate", () => setView(getViewFromUrl()));
 
 // 先に1回だけデータを取る
 load();
 
 // 後から辞書/アイコンが来たら、あれば再描画
 loadDisplayNameDict().then(() => {
-  if (state.lastData) renderWithHandlers(state.lastData);
+  if (state.lastData) renderForView(state.lastData);
 });
 loadIconIndex().then(() => {
-  if (state.lastData) renderWithHandlers(state.lastData);
+  if (state.lastData) renderForView(state.lastData);
 });
 
 // 自動更新スタート
 setAuto(true);
-
