@@ -1,0 +1,128 @@
+version: 1
+
+groups:
+  # --- Sources ---
+  - id: water_source
+    label: Water (infinite)
+    kind: source
+
+  - id: biomass_input
+    label: Biomass inputs (sugarcane/beetroot/melon)
+    kind: source
+
+  - id: cobble_source
+    label: Cobblestone source (extruder)
+    kind: source
+
+  - id: ore_input
+    label: Ore / Raw input
+    kind: source
+
+  # --- Brine / Electrolysis ---
+  - id: evaporation
+    label: Evaporation Plant
+    kind: process
+
+  - id: brine
+    label: Brine
+    kind: intermediate
+
+  - id: electrolysis
+    label: Electrolysis
+    kind: process
+
+  - id: sodium_out
+    label: Sodium output
+    kind: material
+
+  - id: chlorine_out
+    label: Chlorine output
+    kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:chlorine"
+
+  - id: hydrogen_out
+    label: Hydrogen output
+    kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:hydrogen"
+
+  # --- HCl ---
+  - id: hcl_out
+    label: Hydrogen Chloride (HCl)
+    kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:hydrogen_chloride"
+        - "mekanism:hydrogen_chloride"
+
+  # --- Sulfur / Acid (placeholders; you can expand later) ---
+  - id: sulfur_out
+    label: Sulfur output
+    kind: material
+
+  - id: sulfuric_acid_out
+    label: Sulfuric Acid
+    kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:sulfuric_acid"
+        - "mekanism:sulfuric_acid"
+        - "fluid:mekanism:sulfuric_acid"
+
+  # --- Ore 5x (boxed) ---
+  - id: ore_preprocess
+    label: Ore preprocess (fortune/annihilation/raw block)
+    kind: process
+
+  - id: slurry_step
+    label: Slurry step (requires sulfuric acid)
+    kind: process
+
+  - id: ore_5x_chain
+    label: Ore 5x chain (boxed)
+    kind: process
+
+  - id: ore_products
+    label: Ore products (ingots/etc)
+    kind: output
+
+  - id: oxygen_out
+    label: Oxygen (if relevant)
+    kind: material
+
+  # --- Polymer / HDPE ---
+  - id: biofuel_out
+    label: Biofuel
+    kind: material
+
+  - id: substrate_pool
+    label: Substrate pool (canonicalized)
+    kind: material
+
+  - id: ethylene_out
+    label: Ethylene
+    kind: material
+
+  - id: hdpe_out
+    label: HDPE
+    kind: material
+
+  - id: mek_suit_demand
+    label: Mekasuit demand
+    kind: demand
+
+  # --- Gunpowder line ---
+  - id: gravel_out
+    label: Gravel
+    kind: material
+
+  - id: flint_out
+    label: Flint
+    kind: material
+
+  - id: gunpowder_out
+    label: Gunpowder
+    kind: material
