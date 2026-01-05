@@ -6,6 +6,21 @@ from app.main import app  # エントリポイントに合わせて調整
 
 client = TestClient(app)
 
+def patch_aggregate_storage(monkeypatch):
+    # Avoid 503 due to missing GCS_BUCKET and skip real GCS I/O in guard tests.
+    monkeypatch.setattr("app.routes.settings.GCS_BUCKET", "test-bucket")
+
+    def fake_load_json_from_gcs(object_name: str):
+        if object_name.endswith("latest.json"):
+            return {"entries_path": "raw/entries.json", "ts": time.time()}
+        return {"entries": []}
+
+    monkeypatch.setattr("app.routes.load_json_from_gcs", fake_load_json_from_gcs)
+    monkeypatch.setattr(
+        "app.routes.save_json_to_gcs",
+        lambda payload, object_name: f"gs://test-bucket/{object_name}",
+    )
+
 def netid():
     return f"net-test-{uuid.uuid4()}"
 
@@ -19,12 +34,14 @@ def make_headers(api_key: str, ts: float | None = None, nonce: str | None = None
 
 def test_aggregate_ok(monkeypatch):
     monkeypatch.setenv("AGGREGATE_API_KEY", "test-key")
+    patch_aggregate_storage(monkeypatch)
     r = client.post("/jobs/aggregate", headers=make_headers("test-key"), json={"network_id": netid()})
     assert r.status_code == 200
 
 
 def test_missing_api_key(monkeypatch):
     monkeypatch.setenv("AGGREGATE_API_KEY", "test-key")
+    patch_aggregate_storage(monkeypatch)
 
     r = client.post(
         "/jobs/aggregate",
@@ -36,6 +53,7 @@ def test_missing_api_key(monkeypatch):
 
 def test_replayed_nonce(monkeypatch):
     monkeypatch.setenv("AGGREGATE_API_KEY", "test-key")
+    patch_aggregate_storage(monkeypatch)
 
     nid = netid()
     ts = time.time()
@@ -50,6 +68,7 @@ def test_replayed_nonce(monkeypatch):
 
 def test_rate_limit(monkeypatch):
     monkeypatch.setenv("AGGREGATE_API_KEY", "test-key")
+    patch_aggregate_storage(monkeypatch)
 
     nid = netid()
     r1 = client.post("/jobs/aggregate", headers=make_headers("test-key"), json={"network_id": nid})
