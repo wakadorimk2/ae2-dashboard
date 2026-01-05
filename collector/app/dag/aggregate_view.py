@@ -138,9 +138,14 @@ def aggregate_view(entries: List[dict], top_n: int, ts: Optional[float] = None) 
             else:
                 continue
 
-        fingerprint = entry.get("fingerprint") or ""
+        fingerprint = entry.get("fingerprint")
         if not fingerprint:
-            continue
+            kind = entry.get("kind")
+            raw_name = entry.get("raw_name")
+            if kind and raw_name:
+                fingerprint = f"{kind}:{raw_name}"
+            else:
+                continue
         fingerprint = norm_name(fingerprint)
 
         kind = entry.get("kind")
