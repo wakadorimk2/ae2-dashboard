@@ -12,6 +12,14 @@ import { DELTA_UNIT, state } from "./state.js";
 /** @typedef {UiHeatmapEntry & { deltaScaled: number }} UiHeatmapEntryScaled */
 
 const HEATMAP_EPS = 0.02;
+const OTHERS_RAW = "__others__";
+
+/**
+ * @returns {boolean}
+ */
+function shouldLogHeatmapDebug() {
+  return Boolean((/** @type {any} */ (window)).DEBUG_HEATMAP);
+}
 
 /**
  * @param {unknown} value
@@ -167,15 +175,89 @@ export function buildTreemap(items, width, height) {
 function selectHeatmapEntries(list) {
   const entries = Array.isArray(list) ? list.slice() : [];
   if (entries.length === 0) return [];
-  const sortMode = state.heatmapSort;
   entries.sort((a, b) => {
-    const aScore = sortMode === "delta" ? Math.abs(a.delta) : a.amount;
-    const bScore = sortMode === "delta" ? Math.abs(b.delta) : b.amount;
+    const aScore = toNumber(a.amount, 0);
+    const bScore = toNumber(b.amount, 0);
     return bScore - aScore;
   });
-  const maxCount = Math.max(1, state.heatmapCount);
+  const totalAmount = entries.reduce((sum, entry) => {
+    return sum + Math.max(0, toNumber(entry.amount, 0));
+  }, 0);
+  const maxCount = Math.max(1, toNumber(state.heatmapCount, 120));
   const count = Math.min(maxCount, entries.length);
-  return entries.slice(0, count);
+  let top = entries.slice(0, count);
+  let rest = entries.slice(count);
+  const minNamed = 12;
+  const microRatio = 0.002;
+  const microTailCount = 10;
+  const microTailRatio = 0.01;
+  if (totalAmount > 0 && top.length > minNamed) {
+    const microCandidates = new Set();
+    const microMin = totalAmount * microRatio;
+    for (let i = 0; i < top.length; i++) {
+      if (toNumber(top[i].amount, 0) < microMin) microCandidates.add(i);
+    }
+    let tailSum = 0;
+    for (let i = top.length - 1; i >= 0 && (top.length - i) <= microTailCount; i--) {
+      tailSum += Math.max(0, toNumber(top[i].amount, 0));
+      if (tailSum <= totalAmount * microTailRatio) {
+        microCandidates.add(i);
+      } else {
+        break;
+      }
+    }
+    const maxRemovable = top.length - minNamed;
+    if (microCandidates.size > 0 && maxRemovable > 0) {
+      const kept = [];
+      const moved = [];
+      let removed = 0;
+      for (let i = top.length - 1; i >= 0; i--) {
+        const entry = top[i];
+        if (removed < maxRemovable && microCandidates.has(i)) {
+          moved.push(entry);
+          removed += 1;
+        } else {
+          kept.push(entry);
+        }
+      }
+      kept.reverse();
+      moved.reverse();
+      if (moved.length > 0) {
+        top = kept;
+        rest = moved.concat(rest);
+      }
+    }
+  }
+  if (rest.length === 0) return top;
+
+  let otherAmount = 0;
+  let otherDelta = 0;
+  let otherGrowth = 0;
+  let otherDecrease = 0;
+  for (const entry of rest) {
+    otherAmount += toNumber(entry.amount, 0);
+    otherDelta += toNumber(entry.delta, 0);
+    otherGrowth += toNumber(entry.entry?.growth, 0);
+    otherDecrease += toNumber(entry.entry?.decrease, 0);
+  }
+  const otherCount = rest.length;
+  if (otherAmount <= 0) return top;
+  const otherName = `Others (n=${otherCount})`;
+  top.push({
+    raw: OTHERS_RAW,
+    name: otherName,
+    amount: otherAmount,
+    delta: otherDelta,
+    entry: {
+      raw_name: OTHERS_RAW,
+      display_name: otherName,
+      amount: otherAmount,
+      growth: otherGrowth,
+      decrease: otherDecrease,
+      net: otherGrowth - otherDecrease,
+    },
+  });
+  return top;
 }
 
 /**
@@ -254,6 +336,13 @@ export function renderHeatmap(flat) {
   const baseList = flat?.[state.kind] || [];
   const entries = baseList.map(coerceEntry).filter((entry) => entry);
   const list = selectHeatmapEntries(/** @type {UiHeatmapEntry[]} */ (entries));
+  if (shouldLogHeatmapDebug()) {
+    const others = list.find(entry => entry.raw === OTHERS_RAW);
+    const tail = list.slice(-3).map(entry => entry.name || "-");
+    console.log(
+      `[heatmap] raw=${entries.length} selected=${list.length} others=${others ? "yes" : "no"} tail=${tail.join(", ")}`
+    );
+  }
 
   canvas.innerHTML = "";
   if (list.length === 0) {

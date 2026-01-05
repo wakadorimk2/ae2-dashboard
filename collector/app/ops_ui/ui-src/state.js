@@ -28,7 +28,7 @@ export const kindUnit = {
 export const state = {
   kind: "item",
   formatMode: "compact",
-  heatmapCount: 80,
+  heatmapCount: 120,
   heatmapSort: "amount",
   // NOTE: undefined until first load; only normalized data is stored.
   lastData: undefined,
