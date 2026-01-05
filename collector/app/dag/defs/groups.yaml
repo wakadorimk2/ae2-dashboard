@@ -32,13 +32,9 @@ groups:
     label: Ore / Raw input
     kind: source
     members:
-    #   fingerprints:
-    #     - "item:minecraft:deepslate_iron_ore"
       rules:
         - prefix: "item:"
           contains_any: ["_ore", "raw_"]
-    #     - prefix: "item:"
-    #       contains_any: ["_dust", "_chunk"]
 
   # --- Brine / Electrolysis ---
   - id: evaporation
@@ -108,6 +104,11 @@ groups:
   - id: ore_preprocess
     label: Ore preprocess (fortune/annihilation/raw block)
     kind: process
+    sector: ore
+    members:
+      rules:
+        - prefix: "item:"
+          contains_any: ["_dust", ":dust_"]
 
   - id: slurry_step
     label: Slurry step (requires sulfuric acid)
@@ -120,6 +121,11 @@ groups:
   - id: ore_products
     label: Ore products (ingots/etc)
     kind: output
+    sector: ore
+    members:
+      rules:
+        - prefix: "item:"
+          contains_any: ["_ingot", "_nugget", "_gem"]
 
   - id: oxygen_out
     label: Oxygen (if relevant)
@@ -161,6 +167,28 @@ groups:
   - id: gunpowder_out
     label: Gunpowder
     kind: material
+  
+  # --- sector: mob drops ---
+  - id: mob_drops
+    label: Mob drops / Bio byproducts
+    kind: material
+    sector: farming
+    members:
+      rules:
+        - prefix: "item:"
+          contains_any: ["blaze_rod"]
+
+  
+  # --- sector: farming ---
+  - id: farming_products
+    label: Farming products (Mystical Agriculture)
+    kind: material
+    sector: farming
+    members:
+      rules:
+        - prefix: "item:mysticalagriculture:"
+          contains_any: ["_essence", "prosperity_shard"]
+
 
   # --- sector: utility ---
   - id: xp_fluid
@@ -178,3 +206,38 @@ groups:
     members:
       fingerprints:
         - "fluid:biomesoplenty:blood"
+
+  # --- sector: quarry ---
+  - id: terrain_blocks
+    label: Terrain / Byproducts
+    kind: material
+    sector: quarry
+    members:
+      rules:
+        - prefix: "item:minecraft:"
+          contains_any:
+            - "netherrack"
+            - "soul_sand"
+            - "soul_soil"
+            - "magma_block"
+            - "tuff"
+            - "basalt"
+            - "nether_bricks"
+            - "obsidian"
+            - "gravel"
+        - prefix: "item:"
+          contains_any:
+            - ":soulstone"
+            - ":darkstone"
+            - ":brimstone"
+            - ":bloodstone"
+            - ":rhyolite"
+            - ":silt"
+        - prefix: "item:"
+          contains_any: [":soulstone"]
+        - prefix: "item:biomesoplenty:"
+          contains_any: ["flesh"]
+        - prefix: "item:create:"
+          contains_any: ["scoria", "scorchia"]
+
+

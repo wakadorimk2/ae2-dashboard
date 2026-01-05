@@ -127,11 +127,11 @@ def main(
     unknown_amount = Counter()
     unknown_delta = Counter()
 
-    group_amount = defaultdict(int)
-    group_delta = defaultdict(int)
+    group_amount = defaultdict(float)
+    group_delta = defaultdict(float)
 
-    sector_amount = defaultdict(int)
-    sector_delta = defaultdict(int)
+    sector_amount = defaultdict(float)
+    sector_delta = defaultdict(float)
 
     def get_amount(row: dict) -> int:
         # amount/qty/count どれでも拾えるように保険
@@ -150,21 +150,30 @@ def main(
     for payload in iter_jsonl(jsonl_path):
         entries = payload.get("entries") or []
 
-        by_fp = defaultdict(int)
+        by_fp = defaultdict(float)
         kind_by_fp: Dict[str, Optional[str]] = {}
+
         for e in entries:
             fp = e.get("fingerprint")
-            if fp:
-                name = norm_name(fp)
-                by_fp[name] += int(e.get("amount") or 0)
-                if name not in kind_by_fp:
-                    kind_by_fp[name] = e.get("kind")
+            if not fp:
+                continue
+
+            name = norm_name(fp)
+            raw = float(e.get("amount") or 0)
+            k = e.get("kind")  # "item" / "fluid" / "gas"
+
+            # mB -> B (fluids/gases only)
+            val = raw / 1000.0 if k in ("fluid", "gas") else raw
+
+            by_fp[name] += val
+            if name not in kind_by_fp:
+                kind_by_fp[name] = k
 
         for name, amt in by_fp.items():
             total_rows += 1
             unique_items.add(name)
 
-            dlt = 0  # このスナップショット形式だと delta は無いので 0 でOK
+            dlt = 0.0
 
             gid = resolve_group_id(name, kind_by_fp.get(name), item_to_group, rules_chain)
             if gid is None:
@@ -183,7 +192,6 @@ def main(
             sector_delta[sid] += dlt
 
 
-
     # レポート
     print("=== BASIC ===")
     print(f"rows: {total_rows}")
@@ -193,19 +201,19 @@ def main(
 
     print("\n=== TOP UNKNOWN by amount ===")
     for name, v in unknown_amount.most_common(30):
-        print(f"{v:>12}  {name}")
+        print(f"{v:>12.1f}  {name}")
 
     print("\n=== TOP UNKNOWN by delta ===")
     for name, v in unknown_delta.most_common(30):
-        print(f"{v:>12}  {name}")
+        print(f"{v:>12.1f}  {name}")
 
     print("\n=== TOP GROUPS by amount ===")
     for gid, v in sorted(group_amount.items(), key=lambda x: x[1], reverse=True)[:30]:
-        print(f"{v:>12}  {gid}")
+        print(f"{v:>12.1f}  {gid}")
 
     print("\n=== TOP SECTORS by amount ===")
     for sid, v in sorted(sector_amount.items(), key=lambda x: x[1], reverse=True)[:30]:
-        print(f"{v:>12}  {sid}")
+        print(f"{v:>12.1f}  {sid}")
 
     print("\n(done)")
 
