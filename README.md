@@ -1,6 +1,8 @@
 # ae2-dashboard
 MinecraftのAE2(Applied Energistics 2)で、ネットワークの在庫管理をするダッシュボードです。ゲーム内のCraftOS(ComputerCraft及びCC: Tweaked)で動かすためのLuaコードと、Webブラウザから見るダッシュボードのコード(Python/JSTSフロントバック)です。
 
+テスト
+
 ## Note for AI Tools
 
 This repository contains large static asset directories.
