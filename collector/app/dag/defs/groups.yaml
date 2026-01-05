@@ -5,6 +5,16 @@ groups:
   - id: water_source
     label: Water (infinite)
     kind: source
+    members:
+      fingerprints:
+        - "fluid:minecraft:water"
+
+  - id: lava_source
+    label: Lava (bulk)
+    kind: source
+    members:
+      fingerprints:
+        - "fluid:minecraft:lava"
 
   - id: biomass_input
     label: Biomass inputs (sugarcane/beetroot/melon)
@@ -13,6 +23,10 @@ groups:
   - id: cobble_source
     label: Cobblestone source (extruder)
     kind: source
+    members:
+      fingerprints:
+        - "item:minecraft:cobblestone"
+        - "item:minecraft:cobbled_deepslate"
 
   - id: ore_input
     label: Ore / Raw input
@@ -22,10 +36,17 @@ groups:
   - id: evaporation
     label: Evaporation Plant
     kind: process
+    members:
+      fingerprints:
+        - "gas:mekanism:water_vapor"
+        - "gas:mekanism:steam"
 
   - id: brine
     label: Brine
     kind: intermediate
+    members:
+      fingerprints:
+        - "fluid:mekanism:brine"
 
   - id: electrolysis
     label: Electrolysis
@@ -34,6 +55,9 @@ groups:
   - id: sodium_out
     label: Sodium output
     kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:sodium"
 
   - id: chlorine_out
     label: Chlorine output
@@ -92,6 +116,9 @@ groups:
   - id: oxygen_out
     label: Oxygen (if relevant)
     kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:oxygen"
 
   # --- Polymer / HDPE ---
   - id: biofuel_out
@@ -126,3 +153,20 @@ groups:
   - id: gunpowder_out
     label: Gunpowder
     kind: material
+
+  # --- sector: utility ---
+  - id: xp_fluid
+    label: Fluid XP
+    kind: material
+    sector: utility
+    members:
+      fingerprints:
+        - "fluid:mob_grinding_utils:fluid_xp"
+
+  - id: blood_fluid
+    label: Blood
+    kind: material
+    sector: utility
+    members:
+      fingerprints:
+        - "fluid:biomesoplenty:blood"
