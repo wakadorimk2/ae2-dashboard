@@ -9,6 +9,7 @@ import { DELTA_UNIT, state } from "./state.js";
 /** @typedef {import("./types.js").UiTopFlatEntry} UiTopFlatEntry */
 /** @typedef {import("./types.js").UiTopFlat} UiTopFlat */
 /** @typedef {import("./types.js").UiHeatmapEntry} UiHeatmapEntry */
+/** @typedef {UiHeatmapEntry & { deltaScaled: number }} UiHeatmapEntryScaled */
 
 const HEATMAP_EPS = 0.02;
 
@@ -178,69 +179,31 @@ function selectHeatmapEntries(list) {
 }
 
 /**
- * @param {UiTopFlat} flat
+ * @param {HTMLElement} container
+ * @param {Array<{ x: number, y: number, w: number, h: number, item: UiHeatmapEntryScaled }>} tiles
+ * @param {string} unit
+ * @param {string} kind
  */
-export function renderHeatmap(flat) {
-  const canvas = /** @type {HTMLElement | null} */ (document.getElementById("heatmapCanvas"));
-  const empty = /** @type {HTMLElement | null} */ (document.getElementById("heatmapEmpty"));
-  if (!canvas || !empty) return;
-
-  const baseList = flat?.[state.kind] || [];
-  const entries = baseList.map(coerceEntry).filter((entry) => entry);
-  const list = selectHeatmapEntries(/** @type {UiHeatmapEntry[]} */ (entries));
-
-  canvas.innerHTML = "";
-  if (list.length === 0) {
-    empty.style.display = "block";
-    return;
-  }
-  empty.style.display = "none";
-
-  const utils = window.ScaleUtils;
-  const amountValues = list.map(entry => entry.amount);
-  const deltaValues = list.map(entry => entry.delta);
-  const amountNorm = (utils && typeof utils.buildNormalizer === "function")
-    ? utils.buildNormalizer(amountValues, "log1p")
-    : () => 0;
-  let deltaNorm = () => 0;
-  if (utils && typeof utils.buildDeltaNormalizer === "function") {
-    const normer = utils.buildDeltaNormalizer(deltaValues, "p95");
-    if (normer && typeof normer.norm === "function") deltaNorm = normer.norm;
-  }
-
-  const weighted = list.map(entry => ({
-    item: entry,
-    weight: Math.max(HEATMAP_EPS, toNumber(amountNorm(entry.amount), 0)),
-  }));
-
-  const rect = canvas.getBoundingClientRect();
-  const width = rect.width || canvas.clientWidth;
-  const height = rect.height || canvas.clientHeight;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    empty.style.display = "block";
-    return;
-  }
-
-  const tiles = buildTreemap(weighted, width, height);
-  const unit = unitFor(state.kind);
-
+function renderTiles(container, tiles, unit, kind) {
   const frag = document.createDocumentFragment();
   for (const tile of tiles) {
     const entry = tile.item;
     const amount = toNumber(entry.amount, 0);
     const delta = toNumber(entry.delta, 0);
-    const deltaScaled = toNumber(deltaNorm(delta), 0);
+    const deltaScaled = toNumber(entry.deltaScaled, 0);
     const displayName = entry.name || "-";
 
     const el = document.createElement("div");
     el.className = "heatmap-tile";
+    el.dataset.id = `${kind}:${entry.raw}`;
+    el.tabIndex = 0;
     const w = Math.max(0, tile.w);
     const h = Math.max(0, tile.h);
     el.style.left = `${tile.x}px`;
     el.style.top = `${tile.y}px`;
     el.style.width = `${w}px`;
     el.style.height = `${h}px`;
-    el.style.background = colorForDelta(deltaScaled);
+    el.style.setProperty("--tile-bg", colorForDelta(deltaScaled));
 
     if (w < 44 || h < 30) {
       el.classList.add("tiny");
@@ -277,5 +240,59 @@ export function renderHeatmap(flat) {
 
     frag.appendChild(el);
   }
-  canvas.appendChild(frag);
+  container.appendChild(frag);
+}
+
+/**
+ * @param {UiTopFlat} flat
+ */
+export function renderHeatmap(flat) {
+  const canvas = /** @type {HTMLElement | null} */ (document.getElementById("heatmapCanvas"));
+  const empty = /** @type {HTMLElement | null} */ (document.getElementById("heatmapEmpty"));
+  if (!canvas || !empty) return;
+
+  const baseList = flat?.[state.kind] || [];
+  const entries = baseList.map(coerceEntry).filter((entry) => entry);
+  const list = selectHeatmapEntries(/** @type {UiHeatmapEntry[]} */ (entries));
+
+  canvas.innerHTML = "";
+  if (list.length === 0) {
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+
+  const utils = window.ScaleUtils;
+  const amountValues = list.map(entry => entry.amount);
+  const deltaValues = list.map(entry => entry.delta);
+  const amountNorm = (utils && typeof utils.buildNormalizer === "function")
+    ? utils.buildNormalizer(amountValues, "log1p")
+    : () => 0;
+  let deltaNorm = () => 0;
+  if (utils && typeof utils.buildDeltaNormalizer === "function") {
+    const normer = utils.buildDeltaNormalizer(deltaValues, "p95");
+    if (normer && typeof normer.norm === "function") deltaNorm = normer.norm;
+  }
+
+  const normalized = list.map(entry => ({
+    ...entry,
+    deltaScaled: toNumber(deltaNorm(entry.delta), 0),
+  }));
+
+  const weighted = normalized.map(entry => ({
+    item: entry,
+    weight: Math.max(HEATMAP_EPS, toNumber(amountNorm(entry.amount), 0)),
+  }));
+
+  const rect = canvas.getBoundingClientRect();
+  const width = rect.width || canvas.clientWidth;
+  const height = rect.height || canvas.clientHeight;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    empty.style.display = "block";
+    return;
+  }
+
+  const tiles = buildTreemap(weighted, width, height);
+  const unit = unitFor(state.kind);
+  renderTiles(canvas, tiles, unit, state.kind);
 }

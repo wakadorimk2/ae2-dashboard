@@ -64,6 +64,8 @@ function applyView(view) {
 }
 
 let currentView = getViewFromUrl();
+/** @type {ResizeObserver | null} */
+let heatmapResizeObserver = null;
 
 /**
  * @param {import("./types.js").DashboardData | undefined} data
@@ -99,6 +101,38 @@ function setView(nextView) {
   currentView = nextView;
   applyView(currentView);
   if (state.lastData) renderForView(state.lastData);
+}
+
+function setupHeatmapResizeObserver() {
+  const canvas = /** @type {HTMLElement | null} */ (document.getElementById("heatmapCanvas"));
+  if (!canvas || typeof ResizeObserver !== "function") return;
+  if (heatmapResizeObserver) return;
+
+  let lastW = 0;
+  let lastH = 0;
+  /** @type {number | null} */
+  let resizeTimer = null;
+
+  const observer = new ResizeObserver(entries => {
+    const entry = entries[0];
+    if (!entry) return;
+    const rect = entry.contentRect;
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    if (w <= 0 || h <= 0) return;
+    if (w === lastW && h === lastH) return;
+    lastW = w;
+    lastH = h;
+    if (resizeTimer) return;
+    resizeTimer = window.setTimeout(() => {
+      resizeTimer = null;
+      if (currentView !== VIEW_HEATMAP) return;
+      if (state.lastData) renderHeatmapView(state.lastData);
+    }, 100);
+  });
+
+  observer.observe(canvas);
+  heatmapResizeObserver = observer;
 }
 
 export async function load() {
@@ -143,6 +177,7 @@ document.querySelectorAll("#kindToggle .seg-btn").forEach(btn => {
 
 updateKindToggle();
 applyView(currentView);
+setupHeatmapResizeObserver();
 window.addEventListener("hashchange", () => setView(getViewFromUrl()));
 window.addEventListener("popstate", () => setView(getViewFromUrl()));
 
