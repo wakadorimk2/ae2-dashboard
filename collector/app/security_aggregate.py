@@ -99,12 +99,14 @@ async def aggregate_guard(request: Request) -> AggregatePayload:
 
     network_id = payload.network_id
     now = time.time()
+    # Rate-limit by caller identity instead of client-controlled network_id.
+    rate_key = f"aggregate:{api_key}"
     with _lock:
         _prune_rate_limit(now)
-        last_seen = _rate_limit.get(network_id)
+        last_seen = _rate_limit.get(rate_key)
         if last_seen is not None and now - last_seen < RATE_LIMIT_SEC:
             raise HTTPException(status_code=429, detail="rate limit exceeded")
-        _rate_limit[network_id] = now
+        _rate_limit[rate_key] = now
 
     request.state.aggregate_payload = payload
     return payload
