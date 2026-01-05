@@ -31,6 +31,14 @@ groups:
   - id: ore_input
     label: Ore / Raw input
     kind: source
+    members:
+    #   fingerprints:
+    #     - "item:minecraft:deepslate_iron_ore"
+      rules:
+        - prefix: "item:"
+          contains_any: ["_ore", "raw_"]
+    #     - prefix: "item:"
+    #       contains_any: ["_dust", "_chunk"]
 
   # --- Brine / Electrolysis ---
   - id: evaporation

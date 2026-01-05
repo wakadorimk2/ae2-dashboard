@@ -4,7 +4,7 @@ import json
 from collections import defaultdict, Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple, Any
+from typing import Dict, Iterable, List, Tuple, Any, Optional
 
 import yaml
 
@@ -28,11 +28,63 @@ def norm_name(s: str) -> str:
     return s.strip()
 
 
+def rule_matches(rule: dict, fingerprint: str, kind: Optional[str]) -> bool:
+    prefix = rule.get("prefix")
+    if prefix and not fingerprint.startswith(prefix):
+        return False
+
+    contains_any = rule.get("contains_any")
+    if contains_any and not any(token in fingerprint for token in contains_any):
+        return False
+
+    contains_all = rule.get("contains_all")
+    if contains_all and not all(token in fingerprint for token in contains_all):
+        return False
+
+    kind_in = rule.get("kind_in")
+    if kind_in and (kind is None or kind not in kind_in):
+        return False
+
+    return True
+
+
+def _self_check() -> None:
+    # Minimal sanity checks for the rules matcher.
+    assert rule_matches({"prefix": "item:"}, "item:minecraft:iron_ore", None)
+    assert not rule_matches({"prefix": "item:"}, "fluid:minecraft:water", None)
+
+    assert rule_matches({"contains_all": ["iron", "_ore"]}, "item:minecraft:iron_ore", None)
+    
+    # contains_any の true/false を両方チェック
+    assert rule_matches({"contains_any": ["_ore"]}, "item:minecraft:iron_ore", None)
+    assert not rule_matches({"contains_any": ["_ore"]}, "item:minecraft:iron_ingot", None)
+
+
+def resolve_group_id(
+    fingerprint: str,
+    kind: Optional[str],
+    item_to_group: Dict[str, str],
+    rules_chain: List[Tuple[str, dict]],
+) -> Optional[str]:
+    gid = item_to_group.get(fingerprint)
+    if gid is not None:
+        return gid
+
+    # rules are fallback after explicit fingerprints
+    for rule_gid, rule in rules_chain:
+        if rule_matches(rule, fingerprint, kind):
+            return rule_gid
+
+    return None
+
+
 def main(
     groups_yaml: str = "/mnt/data/groups.yaml",
     jsonl_path: str = "dashboard.jsonl",
     limit: int | None = None,
 ) -> None:
+    _self_check()
+
     groups_doc = load_yaml(groups_yaml)
 
     # groups.yaml の形： { version: 1, groups: [...] }
@@ -47,6 +99,7 @@ def main(
     # item -> group_id
     item_to_group: Dict[str, str] = {}
     group_to_sector: Dict[str, str] = {}
+    rules_chain: List[Tuple[str, dict]] = []
 
     for g in groups:
         gid = g["id"]
@@ -57,9 +110,12 @@ def main(
 
         members = g.get("members") or {}
         fps = members.get("fingerprints") or []
+        rules = members.get("rules") or []
 
         for fp in fps:
             item_to_group[norm_name(fp)] = gid
+        for rule in rules:
+            rules_chain.append((gid, rule))
 
     # 集計
     total_rows = 0
@@ -95,10 +151,14 @@ def main(
         entries = payload.get("entries") or []
 
         by_fp = defaultdict(int)
+        kind_by_fp: Dict[str, Optional[str]] = {}
         for e in entries:
             fp = e.get("fingerprint")
             if fp:
-                by_fp[norm_name(fp)] += int(e.get("amount") or 0)
+                name = norm_name(fp)
+                by_fp[name] += int(e.get("amount") or 0)
+                if name not in kind_by_fp:
+                    kind_by_fp[name] = e.get("kind")
 
         for name, amt in by_fp.items():
             total_rows += 1
@@ -106,7 +166,7 @@ def main(
 
             dlt = 0  # このスナップショット形式だと delta は無いので 0 でOK
 
-            gid = item_to_group.get(name)
+            gid = resolve_group_id(name, kind_by_fp.get(name), item_to_group, rules_chain)
             if gid is None:
                 unknown_amount[name] += amt
                 unknown_delta[name] += dlt
