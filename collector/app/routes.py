@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from . import limits, settings
 from .ingest import normalize_ingest_payload
@@ -10,6 +10,7 @@ from .models import IngestEntry, IngestPayload
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
 from .summarize import summarize_items, compute_rankings
 from .dag.aggregate_view import aggregate_view
+from .security_aggregate import AggregatePayload, aggregate_guard
 
 router = APIRouter()
 OPS_UI_DIR = Path(__file__).resolve().parent / "ops_ui"
@@ -295,7 +296,11 @@ def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
     return data
 
 @router.post("/jobs/aggregate")
-def jobs_aggregate(top_n: int = Query(50, ge=1), ts: Optional[float] = Query(None)) -> Dict[str, Any]:
+def jobs_aggregate(
+    top_n: int = Query(50, ge=1),
+    ts: Optional[float] = Query(None),
+    _payload: AggregatePayload = Depends(aggregate_guard),
+) -> Dict[str, Any]:
     if not settings.GCS_BUCKET:
         raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
 
