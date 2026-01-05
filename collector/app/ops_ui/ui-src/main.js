@@ -84,11 +84,18 @@ document.querySelectorAll("#kindToggle .seg-btn").forEach(btn => {
 });
 
 updateKindToggle();
+
+// 先に1回だけデータを取る
+load();
+
+// 後から辞書/アイコンが来たら、あれば再描画
 loadDisplayNameDict().then(() => {
   if (state.lastData) renderWithHandlers(state.lastData);
 });
 loadIconIndex().then(() => {
   if (state.lastData) renderWithHandlers(state.lastData);
 });
-load();
+
+// 自動更新スタート
 setAuto(true);
+
