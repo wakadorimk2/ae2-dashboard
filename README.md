@@ -42,3 +42,36 @@ Cloud Runへのデプロイと、GCSにファイルを保存するまで完了�
 いろいろチャッピーと検討してたら、CC側で複雑な処理をするのは避けて、分析とかUIは外部のサービス(GCPなりAWSなりのPrometheus + Grafana系)に投げたほうが楽そうということで、まずはCCでデータだけを取り出すコードを書く
 ### 2025-1-2 3:50
 マイクラのAll The MOD 9で遊んでたら、AE2のネットワークを管理したくなって、在庫管理とかクラフト状態みたいなのを常に監視できると嬉しいなぁと思った結果、ComputeCraftを発見してLuaを書こうと思った。でもゲーム内のエディターだと限界があるので、GitHubにコードを置いて、VSCodeでコード書いて、それをCraftOSからwgetできる(らしい)のでやってみる。
+
+## APIメモ
+* Endpoint: `POST /jobs/aggregate`
+* Headers:
+
+  * `X-API-Key: <key>`
+  * `X-Timestamp: <unix seconds>`
+  * `X-Nonce: <uuid>`
+* Body:
+
+  * `{"network_id": "<string>"}`
+* Response:
+
+  * `{ ok: true, ts: <float>, view_path: "gs://.../latest.json" }`
+
+## テストメモ
+### Aggregate (manual test)
+
+```bash
+# .env
+SERVICE_URL=https://ae2-dashboard-xxxx.run.app
+NETWORK_ID=base-main
+
+# run
+source .env
+python collector/tests/aggregate_real.py
+````
+
+Required headers:
+
+* `X-API-Key`
+* `X-Timestamp`
+* `X-Nonce`
