@@ -5,6 +5,16 @@ groups:
   - id: water_source
     label: Water (infinite)
     kind: source
+    members:
+      fingerprints:
+        - "fluid:minecraft:water"
+
+  - id: lava_source
+    label: Lava (bulk)
+    kind: source
+    members:
+      fingerprints:
+        - "fluid:minecraft:lava"
 
   - id: biomass_input
     label: Biomass inputs (sugarcane/beetroot/melon)
@@ -13,19 +23,34 @@ groups:
   - id: cobble_source
     label: Cobblestone source (extruder)
     kind: source
+    members:
+      fingerprints:
+        - "item:minecraft:cobblestone"
+        - "item:minecraft:cobbled_deepslate"
 
   - id: ore_input
     label: Ore / Raw input
     kind: source
+    members:
+      rules:
+        - prefix: "item:"
+          contains_any: ["_ore", "raw_"]
 
   # --- Brine / Electrolysis ---
   - id: evaporation
     label: Evaporation Plant
     kind: process
+    members:
+      fingerprints:
+        - "gas:mekanism:water_vapor"
+        - "gas:mekanism:steam"
 
   - id: brine
     label: Brine
     kind: intermediate
+    members:
+      fingerprints:
+        - "fluid:mekanism:brine"
 
   - id: electrolysis
     label: Electrolysis
@@ -34,6 +59,9 @@ groups:
   - id: sodium_out
     label: Sodium output
     kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:sodium"
 
   - id: chlorine_out
     label: Chlorine output
@@ -76,6 +104,11 @@ groups:
   - id: ore_preprocess
     label: Ore preprocess (fortune/annihilation/raw block)
     kind: process
+    sector: ore
+    members:
+      rules:
+        - prefix: "item:"
+          contains_any: ["_dust", ":dust_"]
 
   - id: slurry_step
     label: Slurry step (requires sulfuric acid)
@@ -88,10 +121,18 @@ groups:
   - id: ore_products
     label: Ore products (ingots/etc)
     kind: output
+    sector: ore
+    members:
+      rules:
+        - prefix: "item:"
+          contains_any: ["_ingot", "_nugget", "_gem"]
 
   - id: oxygen_out
     label: Oxygen (if relevant)
     kind: material
+    members:
+      fingerprints:
+        - "gas:mekanism:oxygen"
 
   # --- Polymer / HDPE ---
   - id: biofuel_out
@@ -126,3 +167,77 @@ groups:
   - id: gunpowder_out
     label: Gunpowder
     kind: material
+  
+  # --- sector: mob drops ---
+  - id: mob_drops
+    label: Mob drops / Bio byproducts
+    kind: material
+    sector: farming
+    members:
+      rules:
+        - prefix: "item:"
+          contains_any: ["blaze_rod"]
+
+  
+  # --- sector: farming ---
+  - id: farming_products
+    label: Farming products (Mystical Agriculture)
+    kind: material
+    sector: farming
+    members:
+      rules:
+        - prefix: "item:mysticalagriculture:"
+          contains_any: ["_essence", "prosperity_shard"]
+
+
+  # --- sector: utility ---
+  - id: xp_fluid
+    label: Fluid XP
+    kind: material
+    sector: utility
+    members:
+      fingerprints:
+        - "fluid:mob_grinding_utils:fluid_xp"
+
+  - id: blood_fluid
+    label: Blood
+    kind: material
+    sector: utility
+    members:
+      fingerprints:
+        - "fluid:biomesoplenty:blood"
+
+  # --- sector: quarry ---
+  - id: terrain_blocks
+    label: Terrain / Byproducts
+    kind: material
+    sector: quarry
+    members:
+      rules:
+        - prefix: "item:minecraft:"
+          contains_any:
+            - "netherrack"
+            - "soul_sand"
+            - "soul_soil"
+            - "magma_block"
+            - "tuff"
+            - "basalt"
+            - "nether_bricks"
+            - "obsidian"
+            - "gravel"
+        - prefix: "item:"
+          contains_any:
+            - ":soulstone"
+            - ":darkstone"
+            - ":brimstone"
+            - ":bloodstone"
+            - ":rhyolite"
+            - ":silt"
+        - prefix: "item:"
+          contains_any: [":soulstone"]
+        - prefix: "item:biomesoplenty:"
+          contains_any: ["flesh"]
+        - prefix: "item:create:"
+          contains_any: ["scoria", "scorchia"]
+
+
