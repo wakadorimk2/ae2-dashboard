@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import math
 import os
 import threading
 import time
@@ -60,6 +61,8 @@ async def aggregate_guard(request: Request) -> AggregatePayload:
         request_ts = float(timestamp_header)
     except (TypeError, ValueError):
         raise HTTPException(status_code=401, detail="invalid X-Timestamp (expected unix seconds)")
+    if not math.isfinite(request_ts):
+        raise HTTPException(status_code=401, detail="invalid X-Timestamp (expected unix seconds)")
     now = time.time()
     if abs(now - request_ts) > TIMESTAMP_SKEW_SEC:
         raise HTTPException(status_code=401, detail="X-Timestamp out of range")
@@ -70,7 +73,7 @@ async def aggregate_guard(request: Request) -> AggregatePayload:
     if len(nonce) > MAX_NONCE_LEN:
         raise HTTPException(status_code=401, detail="X-Nonce too long")
 
-    nonce_key = f"{timestamp_header}:{nonce}"
+    nonce_key = nonce
     with _lock:
         _prune_nonce(now)
         if nonce_key in _nonce_cache:

@@ -1,5 +1,6 @@
 import time
 import uuid
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app  # エントリポイントに合わせて調整
@@ -63,6 +64,7 @@ def test_replayed_nonce(monkeypatch):
     r1 = client.post("/jobs/aggregate", headers=headers, json={"network_id": nid})
     assert r1.status_code == 200
 
+    headers = make_headers("test-key", ts=time.time(), nonce=nonce)
     r2 = client.post("/jobs/aggregate", headers=headers, json={"network_id": nid})
     assert r2.status_code == 401
 
@@ -76,3 +78,13 @@ def test_rate_limit(monkeypatch):
 
     r2 = client.post("/jobs/aggregate", headers=make_headers("test-key"), json={"network_id": nid})
     assert r2.status_code == 429
+
+@pytest.mark.parametrize("bad_ts", ["NaN", "inf"])
+def test_invalid_timestamp_non_finite(monkeypatch, bad_ts):
+    monkeypatch.setenv("AGGREGATE_API_KEY", "test-key")
+    patch_aggregate_storage(monkeypatch)
+
+    headers = make_headers("test-key")
+    headers["X-Timestamp"] = bad_ts
+    r = client.post("/jobs/aggregate", headers=headers, json={"network_id": netid()})
+    assert r.status_code == 401
