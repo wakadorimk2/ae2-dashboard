@@ -41,11 +41,6 @@ try:
     )
     print("status:", response.status_code)
 
-    if response.ok:
-        print("Request succeeded.")
-    else:
-        print("Request failed (non-2xx response).")
-
     # まずは JSON をできる限り表示
     try:
         data = response.json()
