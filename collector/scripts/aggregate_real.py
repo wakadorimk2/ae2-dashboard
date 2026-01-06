@@ -46,6 +46,7 @@ try:
     else:
         print("Request failed (non-2xx response).")
 
+    # まずは JSON をできる限り表示
     try:
         data = response.json()
         print(json.dumps(data, ensure_ascii=False, indent=2))
@@ -56,9 +57,14 @@ try:
         print("Raw response content bytes:")
         print(repr(response.content))
         raise SystemExit(1) from decode_err
-    # After attempting to parse and display any error details, propagate non-2xx as an error
-    if not response.ok:
-        response.raise_for_status()
+
+    # 最後に一回だけ成功/失敗を判定して終了
+    if response.ok:
+        print("Request succeeded.")
+    else:
+        print(f"Request failed (status={response.status_code}).")
+        raise SystemExit(1)
+
 except requests.exceptions.RequestException as req_err:
     if isinstance(req_err, requests.exceptions.Timeout):
         print(f"Request timed out: {req_err}")
