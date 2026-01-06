@@ -49,6 +49,7 @@ try:
         print(response.text)
         print("Raw response content bytes:")
         print(repr(response.content))
+        raise SystemExit(1)
 except requests.exceptions.Timeout as timeout_err:
     print(f"Request timed out: {timeout_err}")
     raise SystemExit(1)
