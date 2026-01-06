@@ -1,3 +1,5 @@
+"""Manual integration test script for Aggregate endpoint (not run by pytest)."""
+
 import os
 import time
 import uuid
