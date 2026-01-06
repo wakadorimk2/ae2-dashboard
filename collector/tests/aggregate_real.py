@@ -43,13 +43,10 @@ try:
         print(json.dumps(data, ensure_ascii=False, indent=2))
     except requests.exceptions.JSONDecodeError as e:
         print(f"Failed to parse response as JSON: {e}")
-        try:
-            print("Raw response text:")
-            print(r.text)
-        except UnicodeDecodeError as ue:
-            print(f"Response could not be decoded as text: {ue}")
-            print("Raw response content bytes:")
-            print(repr(r.content))
+        print("Raw response text:")
+        print(r.text)
+        print("Raw response content bytes:")
+        print(repr(r.content))
 except requests.exceptions.Timeout as e:
     print(f"Request timed out: {e}")
     raise SystemExit(1)
