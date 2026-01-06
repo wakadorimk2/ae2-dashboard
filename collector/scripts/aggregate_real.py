@@ -40,6 +40,12 @@ try:
         timeout=60,
     )
     print("status:", response.status_code)
+
+    if response.ok:
+        print("Request succeeded.")
+    else:
+        print("Request failed (non-2xx response).")
+
     try:
         data = response.json()
         print(json.dumps(data, ensure_ascii=False, indent=2))
