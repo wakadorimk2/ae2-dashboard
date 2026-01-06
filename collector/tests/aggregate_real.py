@@ -41,7 +41,7 @@ try:
     try:
         data = r.json()
         print(json.dumps(data, ensure_ascii=False, indent=2))
-    except ValueError as e:
+    except requests.exceptions.JSONDecodeError as e:
         print(f"Failed to parse response as JSON: {e}")
         try:
             print("Raw response text:")
