@@ -18,8 +18,8 @@ test: ## Fast local tests (no external deps)
 test-ci: ## Full test suite (may require env / external deps)
 	@bash -c 'source scripts/env.sh && cd collector && pytest -q'
 
-test-agg: ## Manual aggregate real call (prompts for API key)
-	@bash -c 'source scripts/env.sh && python collector/tests/aggregate_real.py'
+test-agg: ## Manual integration test (real Aggregate call)
+	@bash -c 'source scripts/env.sh && python collector/scripts/aggregate_real.py'
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"; print "Usage: make <target>\n\nTargets:"} /^[a-zA-Z_-]+:.*##/ {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
