@@ -55,7 +55,7 @@ Cloud Runへのデプロイと、GCSにファイルを保存するまで完了�
   * `{"network_id": "<string>"}`
 * Response:
 
-  * `{ ok: true, ts: <float>, view_path: "gs://.../latest.json" }`
+  * `{"ok": true, "ts": 1735800000.123, "view_path": "gs://.../latest.json"}`
 
 ## テストメモ
 ### Aggregate (manual test)
@@ -68,7 +68,7 @@ NETWORK_ID=base-main
 # run
 source .env
 python collector/tests/aggregate_real.py
-````
+```
 
 Required headers:
 

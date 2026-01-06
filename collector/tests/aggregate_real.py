@@ -13,10 +13,10 @@ if not SERVICE_URL:
 NETWORK_ID = os.getenv("NETWORK_ID", "base-main")
 # -------------------------
 
-api_key = getpass.getpass("")  # 非表示入力
+api_key = getpass.getpass("Enter API key: ")  # 非表示入力
 
 headers = {
-    "content-type": "application/json",
+    "Content-Type": "application/json",
     "X-API-Key": api_key,
     "X-Timestamp": str(int(time.time())),
     "X-Nonce": str(uuid.uuid4()),
@@ -35,6 +35,14 @@ r = requests.post(
 
 print("status:", r.status_code)
 try:
-    print(json.dumps(r.json(), ensure_ascii=False, indent=2))
-except Exception:
-    print(r.text)
+    data = r.json()
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+except ValueError as e:
+    print(f"Failed to parse response as JSON: {e}")
+    try:
+        print("Raw response text:")
+        print(r.text)
+    except UnicodeDecodeError as ue:
+        print(f"Response could not be decoded as text: {ue}")
+        print("Raw response content bytes:")
+        print(repr(r.content))
