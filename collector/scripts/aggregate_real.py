@@ -16,7 +16,7 @@ NETWORK_ID = os.getenv("NETWORK_ID", "base-main")
 # -------------------------
 
 while True:
-    api_key = getpass.getpass("Enter API key: ")  # 非表示入力
+    api_key = getpass.getpass("Enter API key: ")  # Prompt for API key (hidden input, 非表示入力)
     if api_key:
         break
     print("API key must not be empty. Please try again.")
@@ -55,7 +55,7 @@ try:
         print(response.text)
         print("Raw response content bytes:")
         print(repr(response.content))
-        raise SystemExit(1)
+        raise SystemExit(1) from decode_err
 except requests.exceptions.Timeout as timeout_err:
     print(f"Request timed out: {timeout_err}")
     raise SystemExit(1)
