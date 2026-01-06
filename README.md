@@ -29,6 +29,8 @@ LLMに調査や実装を依頼する際のスニペット。
 ```
 
 ## メモ
+### 2025-1-7 7:16
+Github Copilot Proに加入して、PRをレビューしてもらうようにした。めっちゃ的確なものが飛んできつつ、それに圧倒されない自分がいて自信がつく。知らないこともたくさんで勉強になるし。とりあえずDAG集計用のaggregate APIを生やした上、セキュリティとテストも追加したので、今後のAPI追加が楽になりそう。
 ### 2025-1-5 14:36
 おはうお。バグ潰しとかTS移行や型を厳しくして、UIに手を加える下地ができた。今はDAGと株ヒートマップ風のUIを結びつける実装を進めている。あとレビューもmain直pushを禁止ルールを作って仕組み的にできないようにした。Github上でCodexにレビューしてもらってからmergeする感じで。
 ### 2025-1-5 9:24
@@ -67,7 +69,7 @@ NETWORK_ID=base-main
 
 # run (recommended)
 source scripts/env.sh
-python collector/tests/aggregate_real.py
+python collector/scripts/aggregate_real.py
 ```
 
 Required headers:
