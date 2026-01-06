@@ -31,28 +31,28 @@ payload = {
 }
 
 try:
-    r = requests.post(
+    response = requests.post(
         f"{SERVICE_URL}/jobs/aggregate",
         headers=headers,
         json=payload,
         timeout=60,
     )
-    print("status:", r.status_code)
+    print("status:", response.status_code)
     try:
-        data = r.json()
+        data = response.json()
         print(json.dumps(data, ensure_ascii=False, indent=2))
-    except requests.exceptions.JSONDecodeError as e:
-        print(f"Failed to parse response as JSON: {e}")
+    except requests.exceptions.JSONDecodeError as decode_err:
+        print(f"Failed to parse response as JSON: {decode_err}")
         print("Raw response text:")
-        print(r.text)
+        print(response.text)
         print("Raw response content bytes:")
-        print(repr(r.content))
-except requests.exceptions.Timeout as e:
-    print(f"Request timed out: {e}")
+        print(repr(response.content))
+except requests.exceptions.Timeout as timeout_err:
+    print(f"Request timed out: {timeout_err}")
     raise SystemExit(1)
-except requests.exceptions.ConnectionError as e:
-    print(f"Network connection error during request: {e}")
+except requests.exceptions.ConnectionError as conn_err:
+    print(f"Network connection error during request: {conn_err}")
     raise SystemExit(1)
-except requests.exceptions.RequestException as e:
-    print(f"HTTP request failed: {e}")
+except requests.exceptions.RequestException as req_err:
+    print(f"HTTP request failed: {req_err}")
     raise SystemExit(1)
