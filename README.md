@@ -65,8 +65,8 @@ Cloud Runへのデプロイと、GCSにファイルを保存するまで完了�
 SERVICE_URL=https://ae2-dashboard-xxxx.run.app
 NETWORK_ID=base-main
 
-# run
-source .env
+# run (recommended)
+source scripts/env.sh
 python collector/tests/aggregate_real.py
 ```
 
