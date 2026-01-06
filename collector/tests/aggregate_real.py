@@ -13,7 +13,11 @@ if not SERVICE_URL:
 NETWORK_ID = os.getenv("NETWORK_ID", "base-main")
 # -------------------------
 
-api_key = getpass.getpass("Enter API key: ")  # 非表示入力
+while True:
+    api_key = getpass.getpass("Enter API key: ")  # 非表示入力
+    if api_key:
+        break
+    print("API key must not be empty. Please try again.")
 
 headers = {
     "Content-Type": "application/json",
@@ -26,23 +30,32 @@ payload = {
     "network_id": NETWORK_ID
 }
 
-r = requests.post(
-    f"{SERVICE_URL}/jobs/aggregate",
-    headers=headers,
-    json=payload,
-    timeout=60,
-)
-
-print("status:", r.status_code)
 try:
-    data = r.json()
-    print(json.dumps(data, ensure_ascii=False, indent=2))
-except ValueError as e:
-    print(f"Failed to parse response as JSON: {e}")
+    r = requests.post(
+        f"{SERVICE_URL}/jobs/aggregate",
+        headers=headers,
+        json=payload,
+        timeout=60,
+    )
+    print("status:", r.status_code)
     try:
-        print("Raw response text:")
-        print(r.text)
-    except UnicodeDecodeError as ue:
-        print(f"Response could not be decoded as text: {ue}")
-        print("Raw response content bytes:")
-        print(repr(r.content))
+        data = r.json()
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    except ValueError as e:
+        print(f"Failed to parse response as JSON: {e}")
+        try:
+            print("Raw response text:")
+            print(r.text)
+        except UnicodeDecodeError as ue:
+            print(f"Response could not be decoded as text: {ue}")
+            print("Raw response content bytes:")
+            print(repr(r.content))
+except requests.exceptions.Timeout as e:
+    print(f"Request timed out: {e}")
+    raise SystemExit(1)
+except requests.exceptions.ConnectionError as e:
+    print(f"Network connection error during request: {e}")
+    raise SystemExit(1)
+except requests.exceptions.RequestException as e:
+    print(f"HTTP request failed: {e}")
+    raise SystemExit(1)
