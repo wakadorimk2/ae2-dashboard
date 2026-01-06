@@ -45,7 +45,6 @@ try:
         print("Request succeeded.")
     else:
         print("Request failed (non-2xx response).")
-        response.raise_for_status()
 
     try:
         data = response.json()
@@ -57,6 +56,9 @@ try:
         print("Raw response content bytes:")
         print(repr(response.content))
         raise SystemExit(1) from decode_err
+    # After attempting to parse and display any error details, propagate non-2xx as an error
+    if not response.ok:
+        response.raise_for_status()
 except requests.exceptions.RequestException as req_err:
     if isinstance(req_err, requests.exceptions.Timeout):
         print(f"Request timed out: {req_err}")
@@ -64,4 +66,4 @@ except requests.exceptions.RequestException as req_err:
         print(f"Network connection error during request: {req_err}")
     else:
         print(f"HTTP request failed: {req_err}")
-    raise SystemExit(1)
+    raise SystemExit(1) from req_err
