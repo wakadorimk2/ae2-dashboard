@@ -126,7 +126,7 @@ def normalize_to_entries(payload: IngestPayload) -> Tuple[List[IngestEntry], str
 
 def normalize_ingest_payload(
     payload: IngestPayload,
-) -> Tuple[List[IngestItem], List[IngestEntry], Dict[str, int], str]:
+) -> Tuple[List[IngestItem], List[IngestEntry], List[IngestEntry], Dict[str, int], str]:
     entries, schema = normalize_to_entries(payload)
     items, kind_counts = entries_to_items(entries)
     counts = {
@@ -135,4 +135,4 @@ def normalize_ingest_payload(
         "gases": kind_counts["gas"],
         "entries": len(entries),
     }
-    return items, entries, counts, schema
+    return items, entries, entries, counts, schema

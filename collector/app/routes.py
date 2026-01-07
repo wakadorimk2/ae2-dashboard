@@ -1,14 +1,16 @@
 from __future__ import annotations
 import json, time
 from pathlib import Path
-from typing import Any, Dict, List
-from fastapi import APIRouter, HTTPException, Query
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from . import limits, settings
 from .ingest import normalize_ingest_payload
 from .models import IngestEntry, IngestPayload
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
 from .summarize import summarize_items, compute_rankings
+from .dag.aggregate_view import aggregate_view
+from .security_aggregate import AggregatePayload, aggregate_guard
 
 router = APIRouter()
 OPS_UI_DIR = Path(__file__).resolve().parent / "ops_ui"
@@ -27,6 +29,41 @@ def _latest_object_name() -> str:
     if prefix:
         return f"{prefix}/latest.json"
     return "latest.json"
+
+def _dashboard_view_object_name() -> str:
+    prefix = settings.GCS_PREFIX.strip("/")
+    base = "dashboard/view/latest.json"
+    if prefix:
+        return f"{prefix}/{base}"
+    return base
+
+def _entries_object_name(ts: float) -> str:
+    prefix = settings.GCS_PREFIX.strip("/")
+    ts_key = int(float(ts) * 1000)
+    base = f"dashboard/snapshots/{ts_key}.json"
+    if prefix:
+        return f"{prefix}/{base}"
+    return base
+
+def _object_name_from_entries_path(entries_path: str) -> str:
+    path = entries_path.strip()
+    if path.startswith("gs://"):
+        prefix = f"gs://{settings.GCS_BUCKET}/"
+        if not path.startswith(prefix):
+            raise ValueError("entries_path bucket mismatch")
+        return path[len(prefix):]
+    return path.lstrip("/")
+
+def _dump_entries(entries: List[Any]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            out.append(entry)
+        elif hasattr(entry, "model_dump"):
+            out.append(entry.model_dump())
+        elif hasattr(entry, "dict"):
+            out.append(entry.dict())
+    return out
 
 def _select_rank_entries(entries: List[IngestEntry], max_entries: int) -> List[IngestEntry]:
     if len(entries) <= max_entries:
@@ -63,7 +100,8 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
             )
         )
 
-    items, rank_entries, counts, schema = normalize_ingest_payload(payload)
+    items, all_entries, rank_entries, counts, schema = normalize_ingest_payload(payload)
+    ts = payload.ts or time.time()
 
     log = {
         "type": "ingest_received",
@@ -97,7 +135,15 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     dump = normalized_payload.model_dump()
     gcs_path = save_jsonl_to_gcs(dump)
 
-    ts = payload.ts or time.time()
+    raw_entries_path = None
+    if settings.GCS_BUCKET:
+        entries_object_name = _entries_object_name(ts)
+        print(f"raw entries object: gs://{settings.GCS_BUCKET}/{entries_object_name}")
+        raw_payload = {"ts": ts, "entries": _dump_entries(all_entries)}
+        try:
+            raw_entries_path = save_json_to_gcs(raw_payload, entries_object_name)
+        except Exception as exc:
+            print(f"failed to save raw entries: {exc}")
 
     summary = summarize_items(items)
     rank_entry_counts = _count_entry_kinds(rank_entries)
@@ -147,9 +193,12 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
         **summary,
         **ranks,
     }
+    if raw_entries_path is not None:
+        resp["entries_path"] = raw_entries_path
 
     if settings.GCS_BUCKET:
         try:
+            print(f"latest object: gs://{settings.GCS_BUCKET}/{_latest_object_name()}")
             save_json_to_gcs(resp, _latest_object_name())
         except Exception as exc:
             print(f"failed to save latest.json: {exc}")
@@ -244,6 +293,130 @@ def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
     )
 
     data["top_n"] = top_n
+    return data
+
+@router.post("/jobs/aggregate")
+def jobs_aggregate(
+    top_n: int = Query(50, ge=1),
+    ts: Optional[float] = Query(None),
+    _payload: AggregatePayload = Depends(aggregate_guard),
+) -> Dict[str, Any]:
+    if not settings.GCS_BUCKET:
+        raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
+
+    latest_payload = None
+    entries_object_name = None
+    entries_source = None
+
+    if ts is None:
+        object_name = _latest_object_name()
+        print(f"latest object: gs://{settings.GCS_BUCKET}/{object_name}")
+        try:
+            latest_payload = load_json_from_gcs(object_name)
+        except Exception as exc:
+            print(f"failed to load latest snapshot for aggregation: {exc}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"failed to load latest snapshot from GCS: gs://{settings.GCS_BUCKET}/{object_name}: {exc}",
+            )
+        if latest_payload is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"latest snapshot not found: gs://{settings.GCS_BUCKET}/{object_name}",
+            )
+        if not isinstance(latest_payload, dict):
+            raise HTTPException(status_code=400, detail="latest snapshot is invalid")
+
+        entries_source = (
+            latest_payload.get("entries_path")
+            or latest_payload.get("entries_object_name")
+        )
+        if not entries_source:
+            raise HTTPException(status_code=400, detail="latest snapshot missing entries_path")
+        try:
+            entries_object_name = _object_name_from_entries_path(str(entries_source))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    else:
+        entries_object_name = _entries_object_name(ts)
+        entries_source = f"gs://{settings.GCS_BUCKET}/{entries_object_name}"
+
+    print(f"raw entries object: gs://{settings.GCS_BUCKET}/{entries_object_name}")
+    try:
+        raw_payload = load_json_from_gcs(entries_object_name)
+    except Exception as exc:
+        print(f"failed to load raw entries for aggregation: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"failed to load raw entries from GCS: gs://{settings.GCS_BUCKET}/{entries_object_name}: {exc}",
+        )
+    if raw_payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"raw entries not found: {entries_source}",
+        )
+    if not isinstance(raw_payload, dict):
+        raise HTTPException(status_code=400, detail="raw entries payload is invalid")
+
+    entries = raw_payload.get("entries")
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="raw entries missing entries")
+
+    if latest_payload is not None:
+        latest_ts = latest_payload.get("ts")
+        raw_ts = raw_payload.get("ts")
+        if latest_ts is not None and raw_ts is not None:
+            try:
+                diff = abs(float(latest_ts) - float(raw_ts))
+            except (TypeError, ValueError):
+                diff = None
+            if diff is not None and diff > 1.0:
+                print(f"warning: latest/raw ts mismatch: latest={latest_ts} raw={raw_ts}")
+
+    try:
+        view_ts = None
+        if latest_payload is not None:
+            view_ts = latest_payload.get("ts")
+        if view_ts is None:
+            view_ts = raw_payload.get("ts") or ts
+        view = aggregate_view(entries, top_n=top_n, ts=view_ts)
+    except Exception as exc:
+        print(f"failed to aggregate view: {exc}")
+        raise HTTPException(status_code=500, detail=f"failed to aggregate view: {exc}")
+
+    view_object_name = _dashboard_view_object_name()
+    try:
+        print(f"view object: gs://{settings.GCS_BUCKET}/{view_object_name}")
+        gcs_path = save_json_to_gcs(view, view_object_name)
+    except Exception as exc:
+        print(f"failed to save dashboard view: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"failed to save dashboard view to GCS: gs://{settings.GCS_BUCKET}/{view_object_name}: {exc}",
+        )
+
+    if gcs_path is None:
+        gcs_path = f"gs://{settings.GCS_BUCKET}/{view_object_name}"
+
+    return {"ok": True, "ts": view.get("ts"), "view_path": gcs_path}
+
+@router.get("/dashboard/view")
+def dashboard_view() -> Dict[str, Any]:
+    if not settings.GCS_BUCKET:
+        raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
+
+    object_name = _dashboard_view_object_name()
+    try:
+        data = load_json_from_gcs(object_name)
+    except Exception as exc:
+        print(f"failed to load dashboard view from GCS: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"failed to load dashboard view from GCS: gs://{settings.GCS_BUCKET}/{object_name}: {exc}",
+        )
+    if data is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+
     return data
 
 @router.get("/dashboard/ui")
