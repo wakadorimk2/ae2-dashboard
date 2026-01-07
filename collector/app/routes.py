@@ -3,7 +3,7 @@ import json, time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from . import limits, settings
 from .ingest import normalize_ingest_payload
 from .models import IngestEntry, IngestPayload
@@ -26,9 +26,10 @@ def _count_entry_kinds(entries: List[IngestEntry]) -> Dict[str, int]:
 
 def _latest_object_name() -> str:
     prefix = settings.GCS_PREFIX.strip("/")
+    base = "latest.json"
     if prefix:
-        return f"{prefix}/latest.json"
-    return "latest.json"
+        return f"{prefix}/{base}"
+    return base
 
 def _dashboard_view_object_name() -> str:
     prefix = settings.GCS_PREFIX.strip("/")
@@ -202,6 +203,37 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
             save_json_to_gcs(resp, _latest_object_name())
         except Exception as exc:
             print(f"failed to save latest.json: {exc}")
+        try:
+            view_object_name = _dashboard_view_object_name()
+            existing_view = None
+            try:
+                existing_view = load_json_from_gcs(view_object_name)
+            except Exception as exc:
+                print(f"failed to load current dashboard view: {exc}")
+            should_update_view = True
+            if isinstance(existing_view, dict):
+                existing_ts = existing_view.get("ts")
+                try:
+                    existing_ts = float(existing_ts) if existing_ts is not None else None
+                except (TypeError, ValueError):
+                    existing_ts = None
+                try:
+                    incoming_ts = float(ts)
+                except (TypeError, ValueError):
+                    incoming_ts = None
+                if existing_ts is not None and incoming_ts is not None and incoming_ts <= existing_ts:
+                    should_update_view = False
+            if should_update_view:
+                view = aggregate_view(_dump_entries(all_entries), top_n=limits.RANKING_MAX, ts=ts)
+                if isinstance(gcs_path, str):
+                    view["gcs_path"] = gcs_path
+                if isinstance(raw_entries_path, str):
+                    view["entries_path"] = raw_entries_path
+                if isinstance(payload.source, str):
+                    view["source"] = payload.source
+                save_json_to_gcs(view, view_object_name)
+        except Exception as exc:
+            print(f"failed to refresh dashboard view: {exc}")
 
     if resp.get("top_amount"):
         print("TOP_AMOUNT:")
@@ -220,19 +252,71 @@ def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
     if not settings.GCS_BUCKET:
         raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
 
-    object_name = _latest_object_name()
+    view_object_name = _dashboard_view_object_name()
+    legacy_object_name = _latest_object_name()
+    data = None
+    legacy_data = None
     try:
-        data = load_json_from_gcs(object_name)
+        view_data = load_json_from_gcs(view_object_name)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"failed to load latest dashboard from GCS: gs://{settings.GCS_BUCKET}/{object_name}: {exc}",
-        )
+        print(f"failed to load dashboard view from GCS: {exc}")
+        view_data = None
+
+    if isinstance(view_data, dict):
+        data = view_data
+
     if data is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"latest dashboard not found: gs://{settings.GCS_BUCKET}/{object_name}",
-        )
+        try:
+            legacy_data = load_json_from_gcs(legacy_object_name)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"failed to load latest dashboard from GCS: gs://{settings.GCS_BUCKET}/{legacy_object_name}: {exc}",
+            )
+        if legacy_data is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"latest dashboard not found: gs://{settings.GCS_BUCKET}/{legacy_object_name}",
+            )
+        if not isinstance(legacy_data, dict):
+            raise HTTPException(status_code=500, detail="latest dashboard payload is invalid")
+        data = legacy_data
+    else:
+        if "top" not in data:
+            try:
+                legacy_data = load_json_from_gcs(legacy_object_name)
+            except Exception as exc:
+                print(f"failed to load legacy dashboard payload: {exc}")
+                legacy_data = None
+            if isinstance(legacy_data, dict):
+                for key in (
+                    "top",
+                    "top_amount_items","top_amount_fluids","top_amount_gases",
+                    "top_growth_per_min_items","top_growth_per_min_fluids","top_growth_per_min_gases",
+                    "top_decrease_per_min_items","top_decrease_per_min_fluids","top_decrease_per_min_gases",
+                ):
+                    if key in legacy_data and key not in data:
+                        data[key] = legacy_data[key]
+                if "source" not in data and isinstance(legacy_data.get("source"), str):
+                    data["source"] = legacy_data["source"]
+                if "gcs_path" not in data and isinstance(legacy_data.get("gcs_path"), str):
+                    data["gcs_path"] = legacy_data["gcs_path"]
+                if "entries_path" not in data and isinstance(legacy_data.get("entries_path"), str):
+                    data["entries_path"] = legacy_data["entries_path"]
+
+    if "gcs_path" not in data and isinstance(data.get("entries_path"), str):
+        data["gcs_path"] = data["entries_path"]
+    data.setdefault("bucket", settings.GCS_BUCKET)
+    prefix = settings.GCS_PREFIX.strip("/")
+    if prefix:
+        data.setdefault("prefix", prefix)
+    ts_value = data.get("ts")
+    try:
+        ts_num = float(ts_value) if ts_value is not None else None
+    except (TypeError, ValueError):
+        ts_num = None
+    if ts_num is not None:
+        data.setdefault("updated_sec_ago", max(0, int(time.time() - ts_num)))
 
     top_n = min(top_n, limits.API_MAX)
 
@@ -293,7 +377,7 @@ def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
     )
 
     data["top_n"] = top_n
-    return data
+    return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
 @router.post("/jobs/aggregate")
 def jobs_aggregate(
@@ -380,6 +464,15 @@ def jobs_aggregate(
         if view_ts is None:
             view_ts = raw_payload.get("ts") or ts
         view = aggregate_view(entries, top_n=top_n, ts=view_ts)
+        if isinstance(latest_payload, dict):
+            if isinstance(latest_payload.get("gcs_path"), str):
+                view["gcs_path"] = latest_payload["gcs_path"]
+            if isinstance(latest_payload.get("entries_path"), str):
+                view["entries_path"] = latest_payload["entries_path"]
+            if isinstance(latest_payload.get("source"), str):
+                view["source"] = latest_payload["source"]
+        if "entries_path" not in view and isinstance(entries_source, str):
+            view["entries_path"] = entries_source
     except Exception as exc:
         print(f"failed to aggregate view: {exc}")
         raise HTTPException(status_code=500, detail=f"failed to aggregate view: {exc}")
