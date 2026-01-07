@@ -291,9 +291,9 @@ def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
             if isinstance(legacy_data, dict):
                 for key in (
                     "top",
-                    "top_amount_items","top_amount_fluids","top_amount_gases",
-                    "top_growth_per_min_items","top_growth_per_min_fluids","top_growth_per_min_gases",
-                    "top_decrease_per_min_items","top_decrease_per_min_fluids","top_decrease_per_min_gases",
+                    "top_amount_items", "top_amount_fluids", "top_amount_gases",
+                    "top_growth_per_min_items", "top_growth_per_min_fluids", "top_growth_per_min_gases",
+                    "top_decrease_per_min_items", "top_decrease_per_min_fluids", "top_decrease_per_min_gases",
                 ):
                     if key in legacy_data and key not in data:
                         data[key] = legacy_data[key]

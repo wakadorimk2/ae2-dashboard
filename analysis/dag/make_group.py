@@ -166,7 +166,8 @@ def main(
             # amount: mB -> B (fluids/gases only)
             amt = raw_amt / 1000.0 if k in ("fluid", "gas") else raw_amt
             by_fp[name] += amt
-            kind_by_fp[name] = k
+            if name not in kind_by_fp:
+                kind_by_fp[name] = k
 
             # delta: 単位が amount と同じスケールなら合わせる
             raw_dlt = get_delta(e)
