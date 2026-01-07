@@ -140,17 +140,18 @@ def main(
                 return int(row[k])
         return 0
 
-    def get_delta(row: dict) -> int:
-        # delta系も保険
+    def get_delta(row: dict) -> float:
         for k in ("delta_per_min", "growth_per_min", "delta"):
-            if k in row and isinstance(row[k], (int, float)):
-                return int(row[k])
-        return 0
-    
+            v = row.get(k)
+            if isinstance(v, (int, float)):
+                return float(v)
+        return 0.0
+
     for payload in iter_jsonl(jsonl_path):
         entries = payload.get("entries") or []
 
         by_fp = defaultdict(float)
+        delta_by_fp = defaultdict(float)
         kind_by_fp: Dict[str, Optional[str]] = {}
 
         for e in entries:
@@ -159,21 +160,26 @@ def main(
                 continue
 
             name = norm_name(fp)
-            raw = float(e.get("amount") or 0)
+            raw_amt = float(e.get("amount") or 0)
             k = e.get("kind")  # "item" / "fluid" / "gas"
 
-            # mB -> B (fluids/gases only)
-            val = raw / 1000.0 if k in ("fluid", "gas") else raw
-
-            by_fp[name] += val
+            # amount: mB -> B (fluids/gases only)
+            amt = raw_amt / 1000.0 if k in ("fluid", "gas") else raw_amt
+            by_fp[name] += amt
             if name not in kind_by_fp:
                 kind_by_fp[name] = k
 
+            # delta: 単位が amount と同じスケールなら合わせる
+            raw_dlt = get_delta(e)
+            dlt = raw_dlt / 1000.0 if k in ("fluid", "gas") else raw_dlt
+            delta_by_fp[name] += dlt
+
+        # ここから下の集計ループで使う
         for name, amt in by_fp.items():
             total_rows += 1
             unique_items.add(name)
 
-            dlt = 0.0
+            dlt = delta_by_fp.get(name, 0.0)
 
             gid = resolve_group_id(name, kind_by_fp.get(name), item_to_group, rules_chain)
             if gid is None:
