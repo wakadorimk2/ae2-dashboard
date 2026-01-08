@@ -8,7 +8,7 @@ from . import limits, settings
 from .ingest import normalize_ingest_payload
 from .models import IngestEntry, IngestPayload
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
-from .summarize import summarize_items, compute_rankings
+from .summarize import summarize_items, compute_rankings, _entry_amount
 from .dag.aggregate_view import aggregate_view
 from .security_aggregate import AggregatePayload, aggregate_guard
 
@@ -69,11 +69,7 @@ def _dump_entries(entries: List[Any]) -> List[Dict[str, Any]]:
 def _select_rank_entries(entries: List[IngestEntry], max_entries: int) -> List[IngestEntry]:
     if len(entries) <= max_entries:
         return entries
-    non_items = [entry for entry in entries if entry.kind in ("fluid", "gas")]
-    items = [entry for entry in entries if entry.kind == "item"]
-    if len(non_items) >= max_entries:
-        return non_items[:max_entries]
-    return non_items + items[: max_entries - len(non_items)]
+    return sorted(entries, key=_entry_amount, reverse=True)[:max_entries]
 
 @router.get("/")
 def root() -> Dict[str, Any]:
