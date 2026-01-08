@@ -101,6 +101,7 @@ def _compute_growth_per_min(
 ) -> float:
     growth, _, _, _ = _compute_growth_info(latest_amount, latest_ts, prev_amount, prev_ts)
     return growth
+
 def _build_dashboard_from_db_rows(
     rows: List[tuple],
     top_n: int,
@@ -204,25 +205,94 @@ def _build_dashboard_from_db_rows(
         kind = entry["kind"]
         if kind in by_kind:
             by_kind[kind].append(entry)
+    items_by_amount_sorted = sorted(
+        by_kind["item"],
+        key=lambda e: e["amount"],
+        reverse=True,
+    )[:top_n]
+    top_amount_items = [_format_amount(e) for e in items_by_amount_sorted]
 
-    top_amount_items = [_format_amount(e) for e in sorted(by_kind["item"], key=lambda e: e["amount"], reverse=True)[:top_n]]
-    top_amount_fluids = [_format_amount(e) for e in sorted(by_kind["fluid"], key=lambda e: e["amount"], reverse=True)[:top_n]]
-    top_amount_gases = [_format_amount(e) for e in sorted(by_kind["gas"], key=lambda e: e["amount"], reverse=True)[:top_n]]
+    fluids_by_amount_sorted = sorted(
+        by_kind["fluid"],
+        key=lambda e: e["amount"],
+        reverse=True,
+    )[:top_n]
+    top_amount_fluids = [_format_amount(e) for e in fluids_by_amount_sorted]
 
-    top_growth_items = [_format_growth(e) for e in sorted([e for e in by_kind["item"] if e["growth_per_min"] > 0], key=lambda e: e["growth_per_min"], reverse=True)[:top_n]]
-    top_growth_fluids = [_format_growth(e) for e in sorted([e for e in by_kind["fluid"] if e["growth_per_min"] > 0], key=lambda e: e["growth_per_min"], reverse=True)[:top_n]]
-    top_growth_gases = [_format_growth(e) for e in sorted([e for e in by_kind["gas"] if e["growth_per_min"] > 0], key=lambda e: e["growth_per_min"], reverse=True)[:top_n]]
+    gases_by_amount_sorted = sorted(
+        by_kind["gas"],
+        key=lambda e: e["amount"],
+        reverse=True,
+    )[:top_n]
+    top_amount_gases = [_format_amount(e) for e in gases_by_amount_sorted]
 
+    growth_items = [
+        e for e in by_kind["item"] if e["growth_per_min"] > 0
+    ]
+    growth_items_sorted = sorted(
+        growth_items,
+        key=lambda e: e["growth_per_min"],
+        reverse=True,
+    )[:top_n]
+    top_growth_items = [_format_growth(e) for e in growth_items_sorted]
+
+    growth_fluids = [
+        e for e in by_kind["fluid"] if e["growth_per_min"] > 0
+    ]
+    growth_fluids_sorted = sorted(
+        growth_fluids,
+        key=lambda e: e["growth_per_min"],
+        reverse=True,
+    )[:top_n]
+    top_growth_fluids = [_format_growth(e) for e in growth_fluids_sorted]
+
+    growth_gases = [
+        e for e in by_kind["gas"] if e["growth_per_min"] > 0
+    ]
+    growth_gases_sorted = sorted(
+        growth_gases,
+        key=lambda e: e["growth_per_min"],
+        reverse=True,
+    )[:top_n]
+    top_growth_gases = [_format_growth(e) for e in growth_gases_sorted]
+
+    decrease_items = [
+        e for e in by_kind["item"] if e["growth_per_min"] < 0
+    ]
+    decrease_items_sorted = sorted(
+        decrease_items,
+        key=lambda e: abs(e["growth_per_min"]),
+        reverse=True,
+    )[:top_n]
     top_decrease_items = [
         _format_decrease(e, abs(e["growth_per_min"]))
-        for e in sorted([e for e in by_kind["item"] if e["growth_per_min"] < 0], key=lambda e: abs(e["growth_per_min"]), reverse=True)[:top_n]
+        for e in decrease_items_sorted
     ]
+
+    decrease_fluids = [
+        e for e in by_kind["fluid"] if e["growth_per_min"] < 0
+    ]
+    decrease_fluids_sorted = sorted(
+        decrease_fluids,
+        key=lambda e: abs(e["growth_per_min"]),
+        reverse=True,
+    )[:top_n]
     top_decrease_fluids = [
         _format_decrease(e, abs(e["growth_per_min"]))
-        for e in sorted([e for e in by_kind["fluid"] if e["growth_per_min"] < 0], key=lambda e: abs(e["growth_per_min"]), reverse=True)[:top_n]
+        for e in decrease_fluids_sorted
     ]
+
+    decrease_gases = [
+        e for e in by_kind["gas"] if e["growth_per_min"] < 0
+    ]
+    decrease_gases_sorted = sorted(
+        decrease_gases,
+        key=lambda e: abs(e["growth_per_min"]),
+        reverse=True,
+    )[:top_n]
     top_decrease_gases = [
         _format_decrease(e, abs(e["growth_per_min"]))
+        for e in decrease_gases_sorted
         for e in sorted([e for e in by_kind["gas"] if e["growth_per_min"] < 0], key=lambda e: abs(e["growth_per_min"]), reverse=True)[:top_n]
     ]
 

@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 
-from app.db import inventory_latest_rows, update_inventory_latest_prev
+from app.db import chunked, inventory_latest_rows, update_inventory_latest_prev
 from app.models import IngestEntry
 
 
@@ -18,6 +18,11 @@ def test_inventory_latest_rows_uses_amount_then_count():
         ("atm9", "fluid", "minecraft:water", 3, 123.4),
         ("atm9", "gas", "mod:gas", 0, 123.4),
     ]
+
+
+def test_chunked_splits_iterable_between_chunks():
+    result = list(chunked(range(7), 3))
+    assert result == [[0, 1, 2], [3, 4, 5], [6]]
 
 
 class FakeDatabaseState:
