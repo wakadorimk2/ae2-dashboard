@@ -8,7 +8,7 @@ from . import limits, settings
 from .ingest import normalize_ingest_payload
 from .models import IngestEntry, IngestPayload
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
-from .summarize import summarize_items, compute_rankings
+from .summarize import summarize_items, compute_rankings, _entry_amount
 from .dag.aggregate_view import aggregate_view
 from .security_aggregate import AggregatePayload, aggregate_guard
 
@@ -65,13 +65,6 @@ def _dump_entries(entries: List[Any]) -> List[Dict[str, Any]]:
         elif hasattr(entry, "dict"):
             out.append(entry.dict())
     return out
-
-def _entry_amount(entry: IngestEntry) -> int:
-    if entry.amount is not None:
-        return entry.amount
-    if entry.count is not None:
-        return entry.count
-    return 0
 
 def _select_rank_entries(entries: List[IngestEntry], max_entries: int) -> List[IngestEntry]:
     if len(entries) <= max_entries:
