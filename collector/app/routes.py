@@ -66,14 +66,17 @@ def _dump_entries(entries: List[Any]) -> List[Dict[str, Any]]:
             out.append(entry.dict())
     return out
 
+def _entry_amount(entry: IngestEntry) -> int:
+    if entry.amount is not None:
+        return entry.amount
+    if entry.count is not None:
+        return entry.count
+    return 0
+
 def _select_rank_entries(entries: List[IngestEntry], max_entries: int) -> List[IngestEntry]:
     if len(entries) <= max_entries:
         return entries
-    non_items = [entry for entry in entries if entry.kind in ("fluid", "gas")]
-    items = [entry for entry in entries if entry.kind == "item"]
-    if len(non_items) >= max_entries:
-        return non_items[:max_entries]
-    return non_items + items[: max_entries - len(non_items)]
+    return sorted(entries, key=_entry_amount, reverse=True)[:max_entries]
 
 @router.get("/")
 def root() -> Dict[str, Any]:
