@@ -72,19 +72,35 @@ def _select_rank_entries(entries: List[IngestEntry], max_entries: int) -> List[I
         return entries
     return sorted(entries, key=_entry_amount, reverse=True)[:max_entries]
 
+def _compute_growth_info(
+    latest_amount: int,
+    latest_ts: float,
+    prev_amount: Optional[int],
+    prev_ts: Optional[float],
+) -> tuple[float, int, float, bool]:
+    """Return (growth_per_min, delta, dt_sec, guard_applied)."""
+    if prev_amount is None or prev_ts is None:
+        return 0.0, 0, 0.0, False
+    dt_raw = latest_ts - prev_ts
+    if dt_raw <= 0:
+        return 0.0, 0, 0.0, False
+    dt_sec = float(dt_raw)
+    guard_applied = dt_sec < settings.MIN_DT_SEC
+    if guard_applied:
+        return 0.0, 0, dt_sec, True
+    delta = latest_amount - prev_amount
+    growth_per_min = delta / dt_sec * 60.0
+    return growth_per_min, delta, dt_sec, False
+
+
 def _compute_growth_per_min(
     latest_amount: int,
     latest_ts: float,
     prev_amount: Optional[int],
     prev_ts: Optional[float],
 ) -> float:
-    if prev_amount is None or prev_ts is None:
-        return 0.0
-    dt = latest_ts - prev_ts
-    if dt <= 0:
-        return 0.0
-    return (latest_amount - prev_amount) / dt * 60.0
-
+    growth, _, _, _ = _compute_growth_info(latest_amount, latest_ts, prev_amount, prev_ts)
+    return growth
 def _build_dashboard_from_db_rows(
     rows: List[tuple],
     top_n: int,
@@ -92,6 +108,7 @@ def _build_dashboard_from_db_rows(
 ) -> Dict[str, Any]:
     entries: List[Dict[str, Any]] = []
     latest_ts = None
+    dt_guard_count = 0
     for kind, raw_name, amount, ts, prev_amount, prev_ts in rows:
         try:
             amount_value = int(amount)
@@ -113,7 +130,15 @@ def _build_dashboard_from_db_rows(
                 prev_ts_value = float(prev_ts)
             except (TypeError, ValueError):
                 prev_ts_value = None
-        growth_per_min = _compute_growth_per_min(amount_value, ts_value, prev_amount_value, prev_ts_value)
+        growth_per_min, delta_value, dt_sec_value, guard_applied = _compute_growth_info(
+            amount_value,
+            ts_value,
+            prev_amount_value,
+            prev_ts_value,
+        )
+        if guard_applied:
+            dt_guard_count += 1
+        decrease_per_min = abs(growth_per_min) if growth_per_min < 0 else 0.0
         entries.append(
             {
                 "kind": kind,
@@ -121,6 +146,9 @@ def _build_dashboard_from_db_rows(
                 "display_name": raw_name,
                 "amount": amount_value,
                 "growth_per_min": growth_per_min,
+                "decrease_per_min": decrease_per_min,
+                "delta": delta_value,
+                "dt_sec": dt_sec_value,
             }
         )
         if latest_ts is None or ts_value > latest_ts:
@@ -132,6 +160,10 @@ def _build_dashboard_from_db_rows(
             "amount": entry["amount"],
             "kind": entry["kind"],
             "display_name": entry["display_name"],
+            "growth_per_min": entry["growth_per_min"],
+            "decrease_per_min": entry["decrease_per_min"],
+            "delta": entry["delta"],
+            "dt_sec": entry["dt_sec"],
         }
 
     def _format_growth(entry: Dict[str, Any]) -> Dict[str, Any]:
@@ -228,6 +260,24 @@ def _build_dashboard_from_db_rows(
         "top_decrease_per_min_fluids": top_decrease_fluids,
         "top_decrease_per_min_gases": top_decrease_gases,
     }
+    data["rows"] = len(entries)
+    data["note"] = {
+        "dt_guard_count": dt_guard_count,
+        "min_dt_sec": settings.MIN_DT_SEC,
+    }
+    if dt_guard_count:
+        print(
+            json.dumps(
+                {
+                    "type": "dashboard_dt_guard",
+                    "world_id": world_id,
+                    "count": dt_guard_count,
+                    "min_dt_sec": settings.MIN_DT_SEC,
+                    "ts": time.time(),
+                },
+                ensure_ascii=False,
+            )
+        )
     return data
 
 @router.get("/")
@@ -301,7 +351,7 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
         except Exception as exc:
             print(f"failed to save raw entries: {exc}")
 
-    world_id = settings.DEFAULT_WORLD_ID
+    world_id = payload.world_id or settings.DEFAULT_WORLD_ID
     try:
         prev_rows, latest_rows = update_inventory_latest_prev(all_entries, ts, world_id)
         print(
@@ -436,36 +486,40 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
 
 @router.get("/dashboard")
 def dashboard(
-    world_id: str = Query(settings.DEFAULT_WORLD_ID),
+    world_id: Optional[str] = Query(None, alias="world_id"),
+    world: Optional[str] = Query(None, alias="world"),
     top_n: int = Query(limits.API_MAX, ge=1),
 ) -> Dict[str, Any]:
+    selected_world_id = world_id or world or settings.DEFAULT_WORLD_ID
     top_n = min(top_n, limits.API_MAX)
     data = None
     legacy_data = None
+    data_source: Optional[str] = None
 
     try:
-        rows = load_inventory_latest_with_prev(world_id)
+        rows = load_inventory_latest_with_prev(selected_world_id)
         if rows:
-            data = _build_dashboard_from_db_rows(rows, top_n, world_id)
+            data = _build_dashboard_from_db_rows(rows, top_n, selected_world_id)
             print(
                 json.dumps(
                     {
                         "type": "dashboard_source",
                         "source": "db",
-                        "world_id": world_id,
+                        "world_id": selected_world_id,
                         "rows": len(rows),
                         "ts": time.time(),
                     },
                     ensure_ascii=False,
                 )
             )
+            data_source = "db"
         else:
             print(
                 json.dumps(
                     {
                         "type": "dashboard_source",
                         "source": "db_empty",
-                        "world_id": world_id,
+                        "world_id": selected_world_id,
                         "rows": 0,
                         "ts": time.time(),
                     },
@@ -478,7 +532,7 @@ def dashboard(
                 {
                     "type": "dashboard_source",
                     "source": "db_error",
-                    "world_id": world_id,
+                    "world_id": selected_world_id,
                     "error": str(exc),
                     "ts": time.time(),
                 },
@@ -489,6 +543,8 @@ def dashboard(
     if data is None:
         if not settings.GCS_BUCKET:
             raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
+
+        data_source = "gcs"
 
         view_object_name = _dashboard_view_object_name()
         legacy_object_name = _latest_object_name()
@@ -545,7 +601,7 @@ def dashboard(
                 {
                     "type": "dashboard_source",
                     "source": "gcs",
-                    "world_id": world_id,
+                    "world_id": selected_world_id,
                     "ts": time.time(),
                 },
                 ensure_ascii=False,
@@ -558,6 +614,11 @@ def dashboard(
     prefix = settings.GCS_PREFIX.strip("/")
     if prefix:
         data.setdefault("prefix", prefix)
+    data.setdefault("world_id", selected_world_id)
+    if data_source == "gcs":
+        data.setdefault("source", "gcs")
+    data.setdefault("rows", len(data.get("top_amount") or []))
+    data.setdefault("note", {})
     ts_value = data.get("ts")
     try:
         ts_num = float(ts_value) if ts_value is not None else None

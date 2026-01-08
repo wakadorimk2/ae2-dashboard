@@ -138,6 +138,24 @@ def update_inventory_latest_prev(
     return prev_rows, latest_rows
 
 
+def get_inventory_latest_primary_key_columns() -> List[str]:
+    query = """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+        WHERE tc.table_schema = 'public'
+          AND tc.table_name = 'inventory_latest'
+          AND tc.constraint_type = 'PRIMARY KEY'
+        ORDER BY kcu.ordinal_position
+    """
+    with db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            return [row[0] for row in cur.fetchall()]
+
+
 def load_inventory_latest_with_prev(
     world_id: str,
 ) -> List[Tuple[str, str, int, float, Optional[int], Optional[float]]]:

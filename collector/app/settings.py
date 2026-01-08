@@ -8,3 +8,4 @@ GCS_BUCKET = os.getenv("GCS_BUCKET", "")
 GCS_PREFIX = os.getenv("GCS_PREFIX", "raw")
 DASHBOARD_TOP_N = limits.API_MAX
 DEFAULT_WORLD_ID = os.getenv("DEFAULT_WORLD_ID", "atm9")
+MIN_DT_SEC = float(os.getenv("MIN_DT_SEC", "10"))
