@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from . import limits, settings
 from .ingest import normalize_ingest_payload
 from .models import IngestEntry, IngestPayload
+from .db import upsert_inventory_latest
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
 from .summarize import summarize_items, compute_rankings, _entry_amount
 from .dag.aggregate_view import aggregate_view
@@ -141,6 +142,12 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
             raw_entries_path = save_json_to_gcs(raw_payload, entries_object_name)
         except Exception as exc:
             print(f"failed to save raw entries: {exc}")
+
+    try:
+        upsert_inventory_latest(all_entries, ts)
+    except Exception as exc:
+        # DBは追加の保存先として扱い、失敗しても既存フローを継続する。
+        print(f"failed to upsert inventory_latest: {exc}")
 
     summary = summarize_items(items)
     rank_entry_counts = _count_entry_kinds(rank_entries)
