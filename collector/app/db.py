@@ -92,6 +92,7 @@ def update_inventory_latest_prev(
     world_id: str,
 ) -> Tuple[int, int]:
     rows = inventory_latest_rows(entries, ts, world_id)
+    psycopg.logger.info("DB UPDATE rows=%s world_id=%s ts=%s", len(rows), world_id, ts)
     if not rows:
         return 0, 0
 
@@ -108,33 +109,65 @@ def update_inventory_latest_prev(
     latest_rows = 0
     with db_connection() as conn:
         with conn.cursor() as cur:
+            existing_latest: dict[Tuple[str, str, str], Tuple[int, float]] = {}
             if keys:
                 placeholders = ", ".join(["(%s, %s, %s)"] * len(keys))
-                prev_query = f"""
-                    INSERT INTO public.inventory_prev (world_id, kind, raw_name, amount_prev, ts_prev)
-                    SELECT latest.world_id, latest.kind, latest.raw_name, latest.amount, latest.ts
-                    FROM public.inventory_latest AS latest
-                    JOIN (VALUES {placeholders}) AS incoming(world_id, kind, raw_name)
-                      ON latest.world_id = incoming.world_id
-                     AND latest.kind = incoming.kind
-                     AND latest.raw_name = incoming.raw_name
-                    ON CONFLICT (world_id, kind, raw_name)
-                    DO UPDATE SET amount_prev = excluded.amount_prev, ts_prev = excluded.ts_prev
+                select_query = f"""
+                    SELECT world_id, kind, raw_name, amount, ts
+                    FROM public.inventory_latest
+                    WHERE (world_id, kind, raw_name) IN ({placeholders})
                 """
                 params: List[object] = []
                 for key in keys:
                     params.extend(key)
+                cur.execute(select_query, params)
+                for world_val, kind_val, raw_val, amount_val, ts_val in cur.fetchall():
+                    existing_latest[(world_val, kind_val, raw_val)] = (amount_val, float(ts_val))
+
+            latest_updates: List[Tuple[str, str, str, int, float]] = []
+            prev_updates: List[Tuple[str, str, str, int, float]] = []
+            for row in rows:
+                key = (row[0], row[1], row[2])
+                incoming_amount = row[3]
+                incoming_ts = row[4]
+                existing = existing_latest.get(key)
+                if existing is None:
+                    latest_updates.append(row)
+                    existing_latest[key] = (incoming_amount, incoming_ts)
+                    continue
+                existing_amount, existing_ts = existing
+                if incoming_ts < existing_ts:
+                    continue
+                if incoming_ts > existing_ts:
+                    prev_updates.append((*key, existing_amount, existing_ts))
+                latest_updates.append(row)
+                existing_latest[key] = (incoming_amount, incoming_ts)
+
+            if prev_updates:
+                placeholders = ", ".join(["(%s, %s, %s, %s, %s)"] * len(prev_updates))
+                prev_query = f"""
+                    INSERT INTO public.inventory_prev (world_id, kind, raw_name, amount_prev, ts_prev)
+                    VALUES {placeholders}
+                    ON CONFLICT (world_id, kind, raw_name)
+                    DO UPDATE SET amount_prev = excluded.amount_prev, ts_prev = excluded.ts_prev
+                """
+                params = []
+                for prev_row in prev_updates:
+                    params.extend(prev_row)
                 cur.execute(prev_query, params)
                 prev_rows = cur.rowcount or 0
 
-            latest_query = """
-                INSERT INTO public.inventory_latest (world_id, kind, raw_name, amount, ts)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (world_id, kind, raw_name)
-                DO UPDATE SET amount = excluded.amount, ts = excluded.ts
-            """
-            cur.executemany(latest_query, rows)
-            latest_rows = len(rows)
+            if latest_updates:
+                latest_query = """
+                    INSERT INTO public.inventory_latest (world_id, kind, raw_name, amount, ts)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (world_id, kind, raw_name)
+                    DO UPDATE SET amount = excluded.amount, ts = excluded.ts
+                    WHERE inventory_latest.ts <= excluded.ts
+                """
+                cur.executemany(latest_query, latest_updates)
+                latest_rows = len(latest_updates)
+        conn.commit()
     return prev_rows, latest_rows
 
 
