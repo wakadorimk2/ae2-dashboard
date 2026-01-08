@@ -144,8 +144,30 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
             print(f"failed to save raw entries: {exc}")
 
     try:
-        upsert_inventory_latest(all_entries, ts)
+        rows = upsert_inventory_latest(all_entries, ts)
+        print(
+            json.dumps(
+                {
+                    "type": "db_upsert_inventory_latest",
+                    "ok": True,
+                    "rows": rows,
+                    "ts": ts,
+                },
+                ensure_ascii=False,
+            )
+        )
     except Exception as exc:
+        print(
+            json.dumps(
+                {
+                    "type": "db_upsert_inventory_latest",
+                    "ok": False,
+                    "error": str(exc),
+                    "ts": ts,
+                },
+                ensure_ascii=False,
+            )
+        )
         # DBは追加の保存先として扱い、失敗しても既存フローを継続する。
         print(f"failed to upsert inventory_latest: {exc}")
 

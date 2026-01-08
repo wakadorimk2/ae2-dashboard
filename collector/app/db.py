@@ -65,10 +65,10 @@ def inventory_latest_rows(entries: Iterable[IngestEntry], ts: float) -> List[Tup
     return rows
 
 
-def upsert_inventory_latest(entries: List[IngestEntry], ts: float) -> None:
+def upsert_inventory_latest(entries: List[IngestEntry], ts: float) -> int:
     rows = inventory_latest_rows(entries, ts)
     if not rows:
-        return
+        return 0
     # executemany is simple and stable for now; swap to COPY later if needed.
     query = """
         INSERT INTO public.inventory_latest (kind, raw_name, amount, ts)
@@ -79,3 +79,4 @@ def upsert_inventory_latest(entries: List[IngestEntry], ts: float) -> None:
     with db_connection() as conn:
         with conn.cursor() as cur:
             cur.executemany(query, rows)
+    return len(rows)
