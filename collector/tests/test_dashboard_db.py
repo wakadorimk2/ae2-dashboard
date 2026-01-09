@@ -37,6 +37,7 @@ def test_dashboard_db_response_shape(monkeypatch):
         ("item", "minecraft:stone", 100, 100.0, 40, 40.0),
         ("fluid", "minecraft:water", 20, 100.0, 50, 40.0),
         ("gas", "mod:gas", 5, 100.0, None, None),
+        ("gas", "mod:leak", 5, 200.0, 10, 140.0),
     ]
     monkeypatch.setattr("app.routes.load_inventory_latest_with_prev", lambda world_id: rows)
 
@@ -46,7 +47,7 @@ def test_dashboard_db_response_shape(monkeypatch):
 
     assert data["source"] == "db"
     assert data["world_id"] == "atm9"
-    assert data["rows"] == 3
+    assert data["rows"] == 4
     note = data.get("note")
     assert isinstance(note, dict)
     assert note.get("dt_guard_count") == 0
@@ -68,6 +69,12 @@ def test_dashboard_db_response_shape(monkeypatch):
     assert first_item["decrease_per_min"] == 0
     assert "top_amount_items" in data
     assert isinstance(data["top_amount_items"][0].get("growth_per_min"), float)
+    gas_decrease = data["top"]["decrease_per_min"]["gas"]
+    assert any(entry["raw_name"] == "mod:leak" for entry in gas_decrease)
+    top_decrease_gases = data["top_decrease_per_min_gases"]
+    leak_entry = next(entry for entry in top_decrease_gases if entry["raw_name"] == "mod:leak")
+    assert leak_entry["kind"] == "gas"
+    assert leak_entry["decrease_per_min"] == pytest.approx(5.0)
 
 
 def test_dashboard_world_alias(monkeypatch):
