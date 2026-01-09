@@ -55,3 +55,4 @@ class IngestPayload(BaseModel):
     job_id: Optional[str] = None
     seq: Optional[int] = None
     total: Optional[int] = None
+    world_id: Optional[str] = Field(None, description="ワールド識別子。未指定時はDEFAULT_WORLD_IDが使われる")

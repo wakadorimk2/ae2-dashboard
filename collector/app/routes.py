@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from . import limits, settings
 from .ingest import normalize_ingest_payload
 from .models import IngestEntry, IngestPayload
+from .db import load_inventory_latest_with_prev, update_inventory_latest_prev
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
 from .summarize import summarize_items, compute_rankings, _entry_amount
 from .dag.aggregate_view import aggregate_view
@@ -70,6 +71,284 @@ def _select_rank_entries(entries: List[IngestEntry], max_entries: int) -> List[I
     if len(entries) <= max_entries:
         return entries
     return sorted(entries, key=_entry_amount, reverse=True)[:max_entries]
+
+def _compute_growth_info(
+    latest_amount: int,
+    latest_ts: float,
+    prev_amount: Optional[int],
+    prev_ts: Optional[float],
+) -> tuple[float, int, float, bool]:
+    """Return (growth_per_min, delta, dt_sec, guard_applied)."""
+    if prev_amount is None or prev_ts is None:
+        return 0.0, 0, 0.0, False
+    dt_raw = latest_ts - prev_ts
+    if dt_raw <= 0:
+        return 0.0, 0, 0.0, False
+    dt_sec = float(dt_raw)
+    guard_applied = dt_sec < settings.MIN_DT_SEC
+    if guard_applied:
+        return 0.0, 0, dt_sec, True
+    delta = latest_amount - prev_amount
+    growth_per_min = delta / dt_sec * 60.0
+    return growth_per_min, delta, dt_sec, False
+
+
+def _compute_growth_per_min(
+    latest_amount: int,
+    latest_ts: float,
+    prev_amount: Optional[int],
+    prev_ts: Optional[float],
+) -> float:
+    growth, _, _, _ = _compute_growth_info(latest_amount, latest_ts, prev_amount, prev_ts)
+    return growth
+
+def _build_dashboard_from_db_rows(
+    rows: List[tuple],
+    top_n: int,
+    world_id: str,
+) -> Dict[str, Any]:
+    entries: List[Dict[str, Any]] = []
+    latest_ts = None
+    dt_guard_count = 0
+    for kind, raw_name, amount, ts, prev_amount, prev_ts in rows:
+        try:
+            amount_value = int(amount)
+        except (TypeError, ValueError):
+            continue
+        try:
+            ts_value = float(ts)
+        except (TypeError, ValueError):
+            continue
+        prev_amount_value = None
+        if prev_amount is not None:
+            try:
+                prev_amount_value = int(prev_amount)
+            except (TypeError, ValueError):
+                prev_amount_value = None
+        prev_ts_value = None
+        if prev_ts is not None:
+            try:
+                prev_ts_value = float(prev_ts)
+            except (TypeError, ValueError):
+                prev_ts_value = None
+        growth_per_min, delta_value, dt_sec_value, guard_applied = _compute_growth_info(
+            amount_value,
+            ts_value,
+            prev_amount_value,
+            prev_ts_value,
+        )
+        if guard_applied:
+            dt_guard_count += 1
+        decrease_per_min = abs(growth_per_min) if growth_per_min < 0 else 0.0
+        entries.append(
+            {
+                "kind": kind,
+                "raw_name": raw_name,
+                "display_name": raw_name,
+                "amount": amount_value,
+                "growth_per_min": growth_per_min,
+                "decrease_per_min": decrease_per_min,
+                "delta": delta_value,
+                "dt_sec": dt_sec_value,
+            }
+        )
+        if latest_ts is None or ts_value > latest_ts:
+            latest_ts = ts_value
+
+    def _format_amount(entry: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "raw_name": entry["raw_name"],
+            "amount": entry["amount"],
+            "kind": entry["kind"],
+            "display_name": entry["display_name"],
+            "growth_per_min": entry["growth_per_min"],
+            "decrease_per_min": entry["decrease_per_min"],
+            "delta": entry["delta"],
+            "dt_sec": entry["dt_sec"],
+        }
+
+    def _format_growth(entry: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "raw_name": entry["raw_name"],
+            "growth_per_min": entry["growth_per_min"],
+            "kind": entry["kind"],
+            "display_name": entry["display_name"],
+        }
+
+    def _format_decrease(entry: Dict[str, Any], decrease_value: float) -> Dict[str, Any]:
+        return {
+            "raw_name": entry["raw_name"],
+            "decrease_per_min": decrease_value,
+            "kind": entry["kind"],
+            "display_name": entry["display_name"],
+        }
+
+    amount_sorted = sorted(entries, key=lambda e: e["amount"], reverse=True)
+    top_amount = [{"raw_name": e["raw_name"], "amount": e["amount"]} for e in amount_sorted[:top_n]]
+
+    growth_entries = [e for e in entries if e["growth_per_min"] > 0]
+    growth_sorted = sorted(growth_entries, key=lambda e: e["growth_per_min"], reverse=True)
+    top_growth = [
+        {"raw_name": e["raw_name"], "growth_per_min": e["growth_per_min"]}
+        for e in growth_sorted[:top_n]
+    ]
+
+    decrease_entries = [e for e in entries if e["growth_per_min"] < 0]
+    decrease_sorted = sorted(decrease_entries, key=lambda e: abs(e["growth_per_min"]), reverse=True)
+    top_decrease = [
+        {"raw_name": e["raw_name"], "decrease_per_min": abs(e["growth_per_min"])}
+        for e in decrease_sorted[:top_n]
+    ]
+
+    by_kind = {"item": [], "fluid": [], "gas": []}
+    for entry in entries:
+        kind = entry["kind"]
+        if kind in by_kind:
+            by_kind[kind].append(entry)
+    items_by_amount_sorted = sorted(
+        by_kind["item"],
+        key=lambda e: e["amount"],
+        reverse=True,
+    )[:top_n]
+    top_amount_items = [_format_amount(e) for e in items_by_amount_sorted]
+
+    fluids_by_amount_sorted = sorted(
+        by_kind["fluid"],
+        key=lambda e: e["amount"],
+        reverse=True,
+    )[:top_n]
+    top_amount_fluids = [_format_amount(e) for e in fluids_by_amount_sorted]
+
+    gases_by_amount_sorted = sorted(
+        by_kind["gas"],
+        key=lambda e: e["amount"],
+        reverse=True,
+    )[:top_n]
+    top_amount_gases = [_format_amount(e) for e in gases_by_amount_sorted]
+
+    growth_items = [
+        e for e in by_kind["item"] if e["growth_per_min"] > 0
+    ]
+    growth_items_sorted = sorted(
+        growth_items,
+        key=lambda e: e["growth_per_min"],
+        reverse=True,
+    )[:top_n]
+    top_growth_items = [_format_growth(e) for e in growth_items_sorted]
+
+    growth_fluids = [
+        e for e in by_kind["fluid"] if e["growth_per_min"] > 0
+    ]
+    growth_fluids_sorted = sorted(
+        growth_fluids,
+        key=lambda e: e["growth_per_min"],
+        reverse=True,
+    )[:top_n]
+    top_growth_fluids = [_format_growth(e) for e in growth_fluids_sorted]
+
+    growth_gases = [
+        e for e in by_kind["gas"] if e["growth_per_min"] > 0
+    ]
+    growth_gases_sorted = sorted(
+        growth_gases,
+        key=lambda e: e["growth_per_min"],
+        reverse=True,
+    )[:top_n]
+    top_growth_gases = [_format_growth(e) for e in growth_gases_sorted]
+
+    decrease_items = [
+        e for e in by_kind["item"] if e["growth_per_min"] < 0
+    ]
+    decrease_items_sorted = sorted(
+        decrease_items,
+        key=lambda e: abs(e["growth_per_min"]),
+        reverse=True,
+    )[:top_n]
+    top_decrease_items = [
+        _format_decrease(e, abs(e["growth_per_min"]))
+        for e in decrease_items_sorted
+    ]
+
+    decrease_fluids = [
+        e for e in by_kind["fluid"] if e["growth_per_min"] < 0
+    ]
+    decrease_fluids_sorted = sorted(
+        decrease_fluids,
+        key=lambda e: abs(e["growth_per_min"]),
+        reverse=True,
+    )[:top_n]
+    top_decrease_fluids = [
+        _format_decrease(e, abs(e["growth_per_min"]))
+        for e in decrease_fluids_sorted
+    ]
+
+    decrease_gases = [
+        e for e in by_kind["gas"] if e["growth_per_min"] < 0
+    ]
+    decrease_gases_sorted = sorted(
+        decrease_gases,
+        key=lambda e: abs(e["growth_per_min"]),
+        reverse=True,
+    )[:top_n]
+    top_decrease_gases = [
+        _format_decrease(e, abs(e["growth_per_min"]))
+        for e in decrease_gases_sorted
+        for e in sorted([e for e in by_kind["gas"] if e["growth_per_min"] < 0], key=lambda e: abs(e["growth_per_min"]), reverse=True)[:top_n]
+    ]
+
+    data: Dict[str, Any] = {
+        "ts": latest_ts,
+        "source": "db",
+        "world_id": world_id,
+        "top_amount": top_amount,
+        "top_growth_per_min": top_growth,
+        "top_decrease_per_min": top_decrease,
+        "top": {
+            "amount": {
+                "item": top_amount_items,
+                "fluid": top_amount_fluids,
+                "gas": top_amount_gases,
+            },
+            "growth_per_min": {
+                "item": top_growth_items,
+                "fluid": top_growth_fluids,
+                "gas": top_growth_gases,
+            },
+            "decrease_per_min": {
+                "item": top_decrease_items,
+                "fluid": top_decrease_fluids,
+                "gas": top_decrease_gases,
+            },
+        },
+        "top_amount_items": top_amount_items,
+        "top_amount_fluids": top_amount_fluids,
+        "top_amount_gases": top_amount_gases,
+        "top_growth_per_min_items": top_growth_items,
+        "top_growth_per_min_fluids": top_growth_fluids,
+        "top_growth_per_min_gases": top_growth_gases,
+        "top_decrease_per_min_items": top_decrease_items,
+        "top_decrease_per_min_fluids": top_decrease_fluids,
+        "top_decrease_per_min_gases": top_decrease_gases,
+    }
+    data["rows"] = len(entries)
+    data["note"] = {
+        "dt_guard_count": dt_guard_count,
+        "min_dt_sec": settings.MIN_DT_SEC,
+    }
+    if dt_guard_count:
+        print(
+            json.dumps(
+                {
+                    "type": "dashboard_dt_guard",
+                    "world_id": world_id,
+                    "count": dt_guard_count,
+                    "min_dt_sec": settings.MIN_DT_SEC,
+                    "ts": time.time(),
+                },
+                ensure_ascii=False,
+            )
+        )
+    return data
 
 @router.get("/")
 def root() -> Dict[str, Any]:
@@ -141,6 +420,38 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
             raw_entries_path = save_json_to_gcs(raw_payload, entries_object_name)
         except Exception as exc:
             print(f"failed to save raw entries: {exc}")
+
+    world_id = payload.world_id or settings.DEFAULT_WORLD_ID
+    try:
+        prev_rows, latest_rows = update_inventory_latest_prev(all_entries, ts, world_id)
+        print(
+            json.dumps(
+                {
+                    "type": "db_update_latest_prev",
+                    "ok": True,
+                    "prev_rows": prev_rows,
+                    "latest_rows": latest_rows,
+                    "ts": ts,
+                    "world_id": world_id,
+                },
+                ensure_ascii=False,
+            )
+        )
+    except Exception as exc:
+        print(
+            json.dumps(
+                {
+                    "type": "db_update_latest_prev",
+                    "ok": False,
+                    "error": str(exc),
+                    "ts": ts,
+                    "world_id": world_id,
+                },
+                ensure_ascii=False,
+            )
+        )
+        # DBは追加の保存先として扱い、失敗しても既存フローを継続する。
+        print(f"failed to update inventory_latest/inventory_prev: {exc}")
 
     summary = summarize_items(items)
     rank_entry_counts = _count_entry_kinds(rank_entries)
@@ -244,61 +555,128 @@ def ingest(payload: IngestPayload) -> Dict[str, Any]:
     return resp
 
 @router.get("/dashboard")
-def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
-    if not settings.GCS_BUCKET:
-        raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
-
-    view_object_name = _dashboard_view_object_name()
-    legacy_object_name = _latest_object_name()
+def dashboard(
+    world_id: Optional[str] = Query(None, alias="world_id"),
+    world: Optional[str] = Query(None, alias="world"),
+    top_n: int = Query(limits.API_MAX, ge=1),
+) -> Dict[str, Any]:
+    selected_world_id = world_id or world or settings.DEFAULT_WORLD_ID
+    top_n = min(top_n, limits.API_MAX)
     data = None
     legacy_data = None
-    try:
-        view_data = load_json_from_gcs(view_object_name)
-    except Exception as exc:
-        print(f"failed to load dashboard view from GCS: {exc}")
-        view_data = None
+    data_source: Optional[str] = None
 
-    if isinstance(view_data, dict):
-        data = view_data
+    try:
+        rows = load_inventory_latest_with_prev(selected_world_id)
+        if rows:
+            data = _build_dashboard_from_db_rows(rows, top_n, selected_world_id)
+            print(
+                json.dumps(
+                    {
+                        "type": "dashboard_source",
+                        "source": "db",
+                        "world_id": selected_world_id,
+                        "rows": len(rows),
+                        "ts": time.time(),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            data_source = "db"
+        else:
+            print(
+                json.dumps(
+                    {
+                        "type": "dashboard_source",
+                        "source": "db_empty",
+                        "world_id": selected_world_id,
+                        "rows": 0,
+                        "ts": time.time(),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+    except Exception as exc:
+        print(
+            json.dumps(
+                {
+                    "type": "dashboard_source",
+                    "source": "db_error",
+                    "world_id": selected_world_id,
+                    "error": str(exc),
+                    "ts": time.time(),
+                },
+                ensure_ascii=False,
+            )
+        )
 
     if data is None:
+        if not settings.GCS_BUCKET:
+            raise HTTPException(status_code=503, detail="GCS_BUCKET is not configured")
+
+        data_source = "gcs"
+
+        view_object_name = _dashboard_view_object_name()
+        legacy_object_name = _latest_object_name()
         try:
-            legacy_data = load_json_from_gcs(legacy_object_name)
+            view_data = load_json_from_gcs(view_object_name)
         except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f"failed to load latest dashboard from GCS: gs://{settings.GCS_BUCKET}/{legacy_object_name}: {exc}",
-            )
-        if legacy_data is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"latest dashboard not found: gs://{settings.GCS_BUCKET}/{legacy_object_name}",
-            )
-        if not isinstance(legacy_data, dict):
-            raise HTTPException(status_code=500, detail="latest dashboard payload is invalid")
-        data = legacy_data
-    else:
-        if "top" not in data:
+            print(f"failed to load dashboard view from GCS: {exc}")
+            view_data = None
+
+        if isinstance(view_data, dict):
+            data = view_data
+
+        if data is None:
             try:
                 legacy_data = load_json_from_gcs(legacy_object_name)
             except Exception as exc:
-                print(f"failed to load legacy dashboard payload: {exc}")
-                legacy_data = None
-            if isinstance(legacy_data, dict):
-                for key in (
-                    "top",
-                    "top_amount_items", "top_amount_fluids", "top_amount_gases",
-                    "top_growth_per_min_items", "top_growth_per_min_fluids", "top_growth_per_min_gases",
-                    "top_decrease_per_min_items", "top_decrease_per_min_fluids", "top_decrease_per_min_gases",
-                ):
-                    if key in legacy_data and key not in data:
-                        data[key] = legacy_data[key]
-                if "source" not in data and isinstance(legacy_data.get("source"), str):
-                    data["source"] = legacy_data["source"]
-                if "gcs_path" not in data and isinstance(legacy_data.get("gcs_path"), str):
-                    data["gcs_path"] = legacy_data["gcs_path"]
-                if "entries_path" not in data and isinstance(legacy_data.get("entries_path"), str):
-                    data["entries_path"] = legacy_data["entries_path"]
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"failed to load latest dashboard from GCS: gs://{settings.GCS_BUCKET}/{legacy_object_name}: {exc}",
+                )
+            if legacy_data is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"latest dashboard not found: gs://{settings.GCS_BUCKET}/{legacy_object_name}",
+                )
+            if not isinstance(legacy_data, dict):
+                raise HTTPException(status_code=500, detail="latest dashboard payload is invalid")
+            data = legacy_data
+        else:
+            if "top" not in data:
+                try:
+                    legacy_data = load_json_from_gcs(legacy_object_name)
+                except Exception as exc:
+                    print(f"failed to load legacy dashboard payload: {exc}")
+                    legacy_data = None
+                if isinstance(legacy_data, dict):
+                    for key in (
+                        "top",
+                        "top_amount_items", "top_amount_fluids", "top_amount_gases",
+                        "top_growth_per_min_items", "top_growth_per_min_fluids", "top_growth_per_min_gases",
+                        "top_decrease_per_min_items", "top_decrease_per_min_fluids", "top_decrease_per_min_gases",
+                    ):
+                        if key in legacy_data and key not in data:
+                            data[key] = legacy_data[key]
+                    if "source" not in data and isinstance(legacy_data.get("source"), str):
+                        data["source"] = legacy_data["source"]
+                    if "gcs_path" not in data and isinstance(legacy_data.get("gcs_path"), str):
+                        data["gcs_path"] = legacy_data["gcs_path"]
+                    if "entries_path" not in data and isinstance(legacy_data.get("entries_path"), str):
+                        data["entries_path"] = legacy_data["entries_path"]
+
+        print(
+            json.dumps(
+                {
+                    "type": "dashboard_source",
+                    "source": "gcs",
+                    "world_id": selected_world_id,
+                    "ts": time.time(),
+                },
+                ensure_ascii=False,
+            )
+        )
 
     if "gcs_path" not in data and isinstance(data.get("entries_path"), str):
         data["gcs_path"] = data["entries_path"]
@@ -306,6 +684,11 @@ def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
     prefix = settings.GCS_PREFIX.strip("/")
     if prefix:
         data.setdefault("prefix", prefix)
+    data.setdefault("world_id", selected_world_id)
+    if data_source == "gcs":
+        data.setdefault("source", "gcs")
+    data.setdefault("rows", len(data.get("top_amount") or []))
+    data.setdefault("note", {})
     ts_value = data.get("ts")
     try:
         ts_num = float(ts_value) if ts_value is not None else None
@@ -313,8 +696,6 @@ def dashboard(top_n: int = Query(limits.API_MAX, ge=1)) -> Dict[str, Any]:
         ts_num = None
     if ts_num is not None:
         data.setdefault("updated_sec_ago", max(0, int(time.time() - ts_num)))
-
-    top_n = min(top_n, limits.API_MAX)
 
     top = data.get("top")
     if isinstance(top, dict):
