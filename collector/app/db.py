@@ -8,12 +8,15 @@ from typing import Iterable, Iterator, List, Optional, Tuple, TypeVar
 import psycopg
 
 from .models import IngestEntry
+import logging
 
 _DB_ENV_KEYS = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")
 _ALLOWED_KINDS = {"item", "fluid", "gas"}
 _SQL_BATCH_SIZE = 500
 
 T = TypeVar("T")
+
+logger = logging.getLogger(__name__)
 
 
 def chunked(iterable: Iterable[T], size: int) -> Iterator[List[T]]:
@@ -42,7 +45,6 @@ def _load_db_config() -> dict:
         "password": os.getenv("DB_PASSWORD"),
         "sslmode": os.getenv("DB_SSLMODE", "require"),
     }
-
 
 @contextmanager
 def db_connection() -> Iterator[psycopg.Connection]:
@@ -107,7 +109,7 @@ def update_inventory_latest_prev(
     world_id: str,
 ) -> Tuple[int, int]:
     rows = inventory_latest_rows(entries, ts, world_id)
-    psycopg.logger.info("DB UPDATE rows=%s world_id=%s ts=%s", len(rows), world_id, ts)
+    logger.info("DB UPDATE rows=%s world_id=%s ts=%s", len(rows), world_id, ts)
     if not rows:
         return 0, 0
 
@@ -204,6 +206,34 @@ def get_inventory_latest_primary_key_columns() -> List[str]:
         with conn.cursor() as cur:
             cur.execute(query)
             return [row[0] for row in cur.fetchall()]
+
+
+def inventory_latest_has_unique_index_on_columns(columns: Tuple[str, ...]) -> bool:
+    if not columns:
+        return False
+    query = """
+        SELECT 1
+        FROM pg_index idx
+        JOIN pg_class tbl ON tbl.oid = idx.indrelid
+        JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+        WHERE idx.indisunique
+          AND ns.nspname = 'public'
+          AND tbl.relname = 'inventory_latest'
+          AND (
+              SELECT array_agg(att.attname ORDER BY key_ords.ord)
+              FROM unnest(idx.indkey) WITH ORDINALITY AS key_ords(attnum, ord)
+              JOIN pg_attribute att
+                ON att.attrelid = idx.indrelid
+               AND att.attnum = key_ords.attnum
+              WHERE key_ords.attnum > 0
+          ) = %s::text[]
+        LIMIT 1
+    """
+    params = [list(columns)]
+    with db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchone() is not None
 
 
 def load_inventory_latest_with_prev(
