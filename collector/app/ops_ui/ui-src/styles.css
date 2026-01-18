@@ -55,7 +55,8 @@ button:hover { filter:brightness(1.08); }
 .is-hidden { display:none; }
 .inspect-header { margin-bottom:16px; }
 .inspect-header h2 { font-size:18px; font-weight:700; margin:0 0 4px; color:var(--text); }
-.inspect-subtitle { font-size:13px; margin:0; color:var(--muted); }
+.inspect-subtitle { font-size:13px; margin:0 0 10px; color:var(--muted); }
+.inspect-header .segmented { margin-top:10px; }
 @media (max-width: 980px) {
   .heatmap-canvas { height:420px; }
 }

@@ -269,7 +269,6 @@ collector/app/ops_ui/static/icons/
 
 # Node.js dependencies
 node_modules/
-package-lock.json
 
 # config file
 cc/config.lua
