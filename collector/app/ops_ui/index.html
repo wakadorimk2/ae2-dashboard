@@ -38,8 +38,8 @@
     <span class="pill meta" id="meta">loading…</span>
     <div class="right">
       <nav class="segmented view-toggle" id="viewToggle" aria-label="View">
-        <a class="seg-btn" data-view="heatmap" href="?view=heatmap">Heatmap</a>
-        <a class="seg-btn" data-view="list" href="?view=list">List</a>
+        <a class="seg-btn" data-view="heatmap" href="?view=heatmap">Observe</a>
+        <a class="seg-btn" data-view="list" href="?view=list">Inspect</a>
       </nav>
       <div class="segmented" id="kindToggle">
         <button class="seg-btn active" data-kind="item">Items</button>
@@ -53,12 +53,16 @@
     <div id="err" class="err" style="display:none;"></div>
 
     <div id="viewHeatmap" class="card heatmap-card">
-      <h2>Heatmap</h2>
+      <h2>Observe</h2>
       <div id="heatmapCanvas" class="heatmap-canvas"></div>
       <div class="muted heatmap-empty" id="heatmapEmpty">No data.</div>
     </div>
 
     <div id="viewList" class="list-section is-hidden">
+      <div class="inspect-header">
+        <h2>Inspect</h2>
+        <p class="muted inspect-subtitle">Detailed metrics and comparisons</p>
+      </div>
       <div class="grid">
         <div class="card">
           <h2>Amount <span class="unit" id="unit-amount"></span></h2>
