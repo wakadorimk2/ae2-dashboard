@@ -24,6 +24,8 @@ function setErr(msg) {
 
 /**
  * @typedef {"heatmap" | "list"} ViewMode
+ * NOTE: Internal values remain "heatmap"/"list" for URL compatibility.
+ * UI labels are now "Observe"/"Inspect" to reflect user experience flow.
  */
 
 const VIEW_HEATMAP = "heatmap";
