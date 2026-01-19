@@ -42,7 +42,10 @@ export function HeatmapPanel(props) {
     titleEl.textContent = title;
   }
 
-  const activeKind = kind || state.kind;
+  const VALID_KINDS = ["item", "fluid", "gas"];
+
+  const resolveKind = kind ?? state.kind;
+  const activeKind = VALID_KINDS.includes(resolveKind) ? resolveKind : "item";
   const baseList = data?.[activeKind] || [];
   const entries = baseList.map(coerceEntry).filter((entry) => entry);
   const list = selectHeatmapEntries(/** @type {UiHeatmapEntry[]} */ (entries));
