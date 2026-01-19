@@ -371,7 +371,7 @@ def health() -> Dict[str, Any]:
 
 @router.get("/dag/upstream")
 def dag_upstream(
-    group_id: str = Query(..., alias="group_id"),
+    group_id: str = Query(...),
 ) -> Dict[str, Any]:
     group_id = group_id.strip()
     if not group_id:
@@ -381,14 +381,14 @@ def dag_upstream(
     except Exception as exc:
         logger.exception("failed to load dag graph")
         raise HTTPException(status_code=500, detail="failed to load dag graph") from exc
-    if group_id not in graph:
+    if not graph.has_node(group_id):
         raise HTTPException(status_code=404, detail=f"group_id not found: {group_id}")
     try:
         upstream = immediate_upstream(graph, group_id)
     except Exception as exc:
         logger.exception("failed to resolve dag upstream")
         raise HTTPException(status_code=500, detail="failed to resolve dag upstream") from exc
-    return {"group_id": group_id, "upstream": upstream}
+    return {"ok": True, "group_id": group_id, "upstream": upstream}
 
 @router.post("/ingest")
 def ingest(payload: IngestPayload) -> Dict[str, Any]:

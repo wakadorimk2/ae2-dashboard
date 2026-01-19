@@ -31,6 +31,9 @@ class DagGraphTests(unittest.TestCase):
         upstream = immediate_upstream(graph, "brine")
         upstream_ids = {item["group_id"] for item in upstream}
         self.assertIn("evaporation", upstream_ids)
+        evaporation = next((item for item in upstream if item["group_id"] == "evaporation"), None)
+        self.assertIsNotNone(evaporation)
+        self.assertIn("confidence", evaporation)
 
 
 class DagStatsTests(unittest.TestCase):

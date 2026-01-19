@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import networkx as nx
 import yaml
@@ -93,7 +94,7 @@ def topo_order(graph: nx.DiGraph) -> list[str]:
     return list(nx.topological_sort(graph))
 
 
-def immediate_upstream(graph: nx.DiGraph, group_id: str) -> list[dict]:
+def immediate_upstream(graph: nx.DiGraph, group_id: str) -> list[dict[str, Any]]:
     """Return immediate upstream nodes for a group id with optional edge metadata."""
     upstream_nodes = []
     for upstream_id in graph.predecessors(group_id):
