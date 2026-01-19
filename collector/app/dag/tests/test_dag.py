@@ -12,6 +12,7 @@ from app.dag.graph import (
     DEFAULT_EDGES_PATH,
     DEFAULT_GROUPS_PATH,
     build_graph,
+    immediate_upstream,
     topo_order,
     validate_graph,
 )
@@ -24,6 +25,12 @@ class DagGraphTests(unittest.TestCase):
         validate_graph(graph)
         order = topo_order(graph)
         self.assertTrue(order)
+
+    def test_immediate_upstream_from_defs(self) -> None:
+        graph = build_graph(DEFAULT_GROUPS_PATH, DEFAULT_EDGES_PATH)
+        upstream = immediate_upstream(graph, "brine")
+        upstream_ids = {item["group_id"] for item in upstream}
+        self.assertIn("evaporation", upstream_ids)
 
 
 class DagStatsTests(unittest.TestCase):
