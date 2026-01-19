@@ -3,7 +3,7 @@
 import { getDisplayName, normalizeResourceId } from "./i18n.js";
 import { getIconUrl } from "./icons.js";
 import { fmtRaw, formatValue, prettyName, unitFor } from "./format.js";
-import { renderHeatmap } from "./heatmap.js";
+import { HeatmapPanel } from "./components/HeatmapPanel.js";
 import { applyMinRatio01, buildListNormalizer, toPerMinute } from "./scale_bridge.js";
 import { KINDS, kindToKey } from "./kind.js";
 import { BAR_MIN_RATIO, DELTA_UNIT, state } from "./state.js";
@@ -199,5 +199,8 @@ export function renderHeatmapView(data) {
   if (!data) return;
   const flat = flattenTop(data);
   state.lastDeltaNormalizers = buildDeltaNormalizersByKind(flat);
-  renderHeatmap(flat);
+  HeatmapPanel({
+    kind: state.kind,
+    data: flat,
+  });
 }
