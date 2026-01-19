@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json, time
 import logging
+import networkx as nx
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -24,7 +25,7 @@ OPS_UI_INDEX = OPS_UI_DIR / "index.html"
 
 
 @lru_cache(maxsize=1)
-def _load_dag_graph() -> Any:
+def _load_dag_graph() -> nx.DiGraph:
     return build_graph(DEFAULT_GROUPS_PATH, DEFAULT_EDGES_PATH)
 
 def _count_entry_kinds(entries: List[IngestEntry]) -> Dict[str, int]:
