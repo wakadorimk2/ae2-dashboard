@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import networkx as nx
 import yaml
@@ -91,3 +92,16 @@ def validate_graph(graph: nx.DiGraph) -> None:
 def topo_order(graph: nx.DiGraph) -> list[str]:
     """Return the topological order of the graph's nodes."""
     return list(nx.topological_sort(graph))
+
+
+def immediate_upstream(graph: nx.DiGraph, group_id: str) -> list[dict[str, Any]]:
+    """Return immediate upstream nodes for a group id with optional edge metadata."""
+    upstream_nodes = []
+    for upstream_id in graph.predecessors(group_id):
+        edge_data = graph.get_edge_data(upstream_id, group_id) or {}
+        item = {"group_id": upstream_id}
+        if "confidence" in edge_data:
+            item["confidence"] = edge_data["confidence"]
+        upstream_nodes.append(item)
+    upstream_nodes.sort(key=lambda item: item["group_id"])
+    return upstream_nodes

@@ -1,5 +1,8 @@
 from __future__ import annotations
 import json, time
+import logging
+import networkx as nx
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,11 +14,19 @@ from .db import load_inventory_latest_with_prev, update_inventory_latest_prev
 from .storage_gcs import save_jsonl_to_gcs, save_json_to_gcs, load_json_from_gcs
 from .summarize import summarize_items, compute_rankings, _entry_amount
 from .dag.aggregate_view import aggregate_view
+from .dag.graph import DEFAULT_EDGES_PATH, DEFAULT_GROUPS_PATH, build_graph, immediate_upstream
 from .security_aggregate import AggregatePayload, aggregate_guard
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 OPS_UI_DIR = Path(__file__).resolve().parent / "ops_ui"
 OPS_UI_INDEX = OPS_UI_DIR / "index.html"
+
+
+@lru_cache(maxsize=1)
+def _load_dag_graph() -> nx.DiGraph:
+    return build_graph(DEFAULT_GROUPS_PATH, DEFAULT_EDGES_PATH)
 
 def _count_entry_kinds(entries: List[IngestEntry]) -> Dict[str, int]:
     counts = {"item": 0, "fluid": 0, "gas": 0}
@@ -357,6 +368,28 @@ def root() -> Dict[str, Any]:
 @router.get("/health")
 def health() -> Dict[str, Any]:
     return {"ok": True, "name": settings.APP_NAME, "ts": time.time()}
+
+
+@router.get("/dag/upstream")
+def dag_upstream(
+    group_id: str = Query(...),
+) -> Dict[str, Any]:
+    group_id = group_id.strip()
+    if not group_id:
+        raise HTTPException(status_code=400, detail="group_id is required")
+    try:
+        graph = _load_dag_graph()
+    except Exception as exc:
+        logger.exception("failed to load dag graph")
+        raise HTTPException(status_code=500, detail="failed to load dag graph") from exc
+    if not graph.has_node(group_id):
+        raise HTTPException(status_code=404, detail=f"group_id not found: {group_id}")
+    try:
+        upstream = immediate_upstream(graph, group_id)
+    except Exception as exc:
+        logger.exception("failed to resolve dag upstream")
+        raise HTTPException(status_code=500, detail="failed to resolve dag upstream") from exc
+    return {"ok": True, "group_id": group_id, "upstream": upstream}
 
 @router.post("/ingest")
 def ingest(payload: IngestPayload) -> Dict[str, Any]:
