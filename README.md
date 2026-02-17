@@ -9,6 +9,106 @@ Do NOT scan or enumerate icon or build artifacts.
 Please read **AI_GUIDE.md** before any investigation or implementation.
 
 
+## Architecture Overview
+
+```
+CC:Tweaked (Lua)              Cloud Run (Python)             Browser
+┌────────────┐  HTTP POST   ┌──────────────────┐  GET /dashboard/ui
+│ AE2 Network├─────────────►│ FastAPI (/ingest) ├──────────────────► Heatmap UI
+│ in Minecraft│   /ingest    │                  │                    (Vite SPA)
+└────────────┘              │  ┌──── GCS ─────┐ │
+                            │  │ snapshots    │ │
+                            │  └──────────────┘ │
+                            │  ┌── PostgreSQL ─┐ │
+                            │  │ inventory_*   │ │
+                            │  └──────────────┘ │
+                            └──────────────────┘
+```
+
+- **`cc/`** — Minecraft内のCC:Tweakedで動くLuaスクリプト。AE2ネットワークの在庫を定期的にHTTP POSTで送信する
+- **`collector/`** — FastAPI バックエンド。データ受信（`/ingest`）、集計、ダッシュボードAPI、UIの配信を担当
+  - `collector/app/ops_ui/ui-src/` — Vite でビルドされるフロントエンド（ヒートマップUI）
+- **`scripts/`** — env読み込み・Docker起動・Cloud Runデプロイ用のシェルスクリプト
+- **`migrations/`** — PostgreSQLスキーマ変更用SQL
+
+## Prerequisites
+
+| ツール | バージョン | 備考 |
+|---|---|---|
+| Python | 3.12+ | Dockerfile基準 |
+| Node.js | 20+ | UIビルド用 (Dockerビルド時に自動で使用) |
+| Docker | 20+ | `make dev` で使用 |
+| gcloud CLI | — | `make deploy` で使用（ローカル開発のみなら不要） |
+
+## Quick Start
+
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/wakadorimk2/ae2-dashboard.git
+cd ae2-dashboard
+
+# 2. .env を作成（各変数は下記 Configuration を参照）
+cp .env.example .env
+# ⚠ .env には秘密情報が含まれます。絶対にコミットしないでください。
+
+# 3-A. Docker でローカル起動（推奨：UIビルドも含む）
+make dev
+# → http://localhost:8080/dashboard/ui でダッシュボードが開く
+
+# 3-B. Python だけで起動（UIビルドなし・API開発向け）
+pip install -r collector/requirements.txt
+make dev-local
+# → http://localhost:8080/ でAPIが動く
+
+# 4. テスト実行
+pip install -r collector/requirements-dev.txt
+make test
+```
+
+## Configuration
+
+`.env` に設定する環境変数の一覧。
+
+### アプリケーション
+
+| 変数名 | 必須 | デフォルト | 説明 |
+|---|---|---|---|
+| `APP_NAME` | — | `ae2-collector` | アプリ名（APIレスポンスに表示） |
+| `PORT` | — | `8080` | リッスンポート |
+| `LOG_RAW` | — | `0` | `1` で受信ペイロードを全ログ出力 |
+| `MAX_ITEMS` | — | `200000` | 1回のingestで受け入れる最大アイテム数 |
+| `DEFAULT_WORLD_ID` | — | `atm9` | world_id未指定時のデフォルト値 |
+| `MIN_DT_SEC` | — | `10` | 増減率計算をスキップする最小時間差（秒） |
+
+### GCP / Cloud Run
+
+| 変数名 | 必須 | デフォルト | 説明 |
+|---|---|---|---|
+| `GCP_PROJECT` | デプロイ時 | — | GCPプロジェクトID |
+| `GOOGLE_CLOUD_PROJECT` | デプロイ時 | — | GCPプロジェクトID（Cloud Run用） |
+| `GCS_BUCKET` | Yes | — | スナップショット保存先のGCSバケット名 |
+| `GCS_PREFIX` | — | `raw` | GCSオブジェクトのプレフィックス |
+| `REGION` | — | `us-west1` | Cloud Runリージョン |
+| `SERVICE` | デプロイ時 | — | Cloud Runサービス名 |
+
+### Database (PostgreSQL)
+
+| 変数名 | 必須 | デフォルト | 説明 |
+|---|---|---|---|
+| `DB_HOST` | Yes | — | PostgreSQLホスト |
+| `DB_PORT` | Yes | — | ポート（通常 `5432`） |
+| `DB_NAME` | Yes | — | データベース名 |
+| `DB_USER` | Yes | — | 接続ユーザー |
+| `DB_PASSWORD` | Yes | — | パスワード |
+| `DB_SSLMODE` | — | `require` | SSL接続モード |
+
+### テスト / その他
+
+| 変数名 | 必須 | デフォルト | 説明 |
+|---|---|---|---|
+| `SERVICE_URL` | テスト時 | — | 手動テスト用のCloud Run URL |
+| `NETWORK_ID` | テスト時 | — | 手動テスト用のネットワークID |
+
 ## 使い方
 ```bash
 make dev        # ← ローカルテスト
