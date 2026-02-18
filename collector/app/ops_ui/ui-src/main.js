@@ -137,17 +137,91 @@ function setupHeatmapResizeObserver() {
   heatmapResizeObserver = observer;
 }
 
-export async function load() {
-  setErr("");
+/**
+ * @returns {boolean}
+ */
+function isDebug() {
+  return new URLSearchParams(window.location.search).get("debug") === "1";
+}
+
+/**
+ * @returns {boolean}
+ */
+function getSnapshotFlag() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("snapshot") === "1";
+}
+
+/**
+ * @returns {Promise<import("./types.js").DashboardData>}
+ */
+async function fetchDashboardData() {
   const url = `/dashboard?top_n=${encodeURIComponent(String(TOP_N))}`;
-  let data;
-  try {
+  const fetchFromApi = async () => {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) {
       const t = await res.text();
       throw new Error(`HTTP ${res.status}: ${t}`);
     }
-    data = normalizeDashboardData(await res.json());
+    return normalizeDashboardData(await res.json());
+  };
+
+  if (!getSnapshotFlag()) return fetchFromApi();
+
+  const resolveSnapshotUrl = async () => {
+    const debug = isDebug();
+    const baseFromEnv = import.meta.env.BASE_URL;
+    if (baseFromEnv) {
+      try {
+        const envBaseUrl = new URL(baseFromEnv, window.location.href).toString();
+        const url = new URL("fixtures/snapshot.json", envBaseUrl).toString();
+        if (debug) console.debug("[snapshot] strategy=env-base-url", url);
+        return url;
+      } catch (e) {
+        if (debug) console.debug("[snapshot] strategy=env-base-url failed", e);
+        // fall through
+      }
+    }
+
+    try {
+      const manifestUrl = new URL("manifest.json", window.location.href).toString();
+      const res = await fetch(manifestUrl, { cache: "no-store" });
+      if (res.ok) {
+        const manifestDirUrl = new URL("./", res.url).toString();
+        const url = new URL("fixtures/snapshot.json", manifestDirUrl).toString();
+        if (debug) console.debug("[snapshot] strategy=manifest", url);
+        return url;
+      }
+    } catch (e) {
+      if (debug) console.debug("[snapshot] strategy=manifest failed", e);
+      // fall through
+    }
+
+    const pageDirUrl = new URL("./", window.location.href).toString();
+    const url = new URL("fixtures/snapshot.json", pageDirUrl).toString();
+    if (debug) console.debug("[snapshot] strategy=page-dir (fallback)", url);
+    return url;
+  };
+
+  const snapshotUrl = await resolveSnapshotUrl();
+  try {
+    const res = await fetch(snapshotUrl, { cache: "no-store" });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`HTTP ${res.status}: ${t}`);
+    }
+    return normalizeDashboardData(await res.json());
+  } catch (e) {
+    console.warn(`snapshot fetch failed; fallback to API (expected at ${snapshotUrl})`, e);
+    return fetchFromApi();
+  }
+}
+
+export async function load() {
+  setErr("");
+  let data;
+  try {
+    data = await fetchDashboardData();
   } catch (e) {
     setErr(String(e));
     return;
