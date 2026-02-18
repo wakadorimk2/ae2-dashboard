@@ -42,10 +42,10 @@ export function HeatmapPanel(props) {
     titleEl.textContent = title;
   }
 
-  const VALID_KINDS = ["item", "fluid", "gas"];
+  const VALID_KINDS = new Set(["item", "fluid", "gas"]);
 
   const resolveKind = kind ?? state.kind;
-  const activeKind = VALID_KINDS.includes(resolveKind) ? resolveKind : "item";
+  const activeKind = VALID_KINDS.has(resolveKind) ? resolveKind : "item";
   const baseList = data?.[activeKind] || [];
   const entries = baseList.map(coerceEntry).filter((entry) => entry);
   const list = selectHeatmapEntries(/** @type {UiHeatmapEntry[]} */ (entries));
@@ -65,6 +65,10 @@ export function HeatmapPanel(props) {
   emptyEl.style.display = "none";
 
   const utils = window.ScaleUtils;
+  // ScaleUtils is expected to be loaded via scale.js before HeatmapPanel renders.
+  if (!utils && shouldLogHeatmapDebug()) {
+    console.debug("[heatmap] ScaleUtils not found: normalization disabled");
+  }
   const amountValues = list.map(entry => entry.amount);
   const deltaValues = list.map(entry => entry.delta);
   const amountNorm = (utils && typeof utils.buildNormalizer === "function")

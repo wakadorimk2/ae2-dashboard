@@ -140,6 +140,13 @@ function setupHeatmapResizeObserver() {
 /**
  * @returns {boolean}
  */
+function isDebug() {
+  return new URLSearchParams(window.location.search).get("debug") === "1";
+}
+
+/**
+ * @returns {boolean}
+ */
 function getSnapshotFlag() {
   const params = new URLSearchParams(window.location.search);
   return params.get("snapshot") === "1";
@@ -162,12 +169,16 @@ async function fetchDashboardData() {
   if (!getSnapshotFlag()) return fetchFromApi();
 
   const resolveSnapshotUrl = async () => {
+    const debug = isDebug();
     const baseFromEnv = import.meta.env.BASE_URL;
     if (baseFromEnv) {
       try {
         const envBaseUrl = new URL(baseFromEnv, window.location.href).toString();
-        return new URL("fixtures/snapshot.json", envBaseUrl).toString();
-      } catch {
+        const url = new URL("fixtures/snapshot.json", envBaseUrl).toString();
+        if (debug) console.debug("[snapshot] strategy=env-base-url", url);
+        return url;
+      } catch (e) {
+        if (debug) console.debug("[snapshot] strategy=env-base-url failed", e);
         // fall through
       }
     }
@@ -177,14 +188,19 @@ async function fetchDashboardData() {
       const res = await fetch(manifestUrl, { cache: "no-store" });
       if (res.ok) {
         const manifestDirUrl = new URL("./", res.url).toString();
-        return new URL("fixtures/snapshot.json", manifestDirUrl).toString();
+        const url = new URL("fixtures/snapshot.json", manifestDirUrl).toString();
+        if (debug) console.debug("[snapshot] strategy=manifest", url);
+        return url;
       }
-    } catch {
+    } catch (e) {
+      if (debug) console.debug("[snapshot] strategy=manifest failed", e);
       // fall through
     }
 
     const pageDirUrl = new URL("./", window.location.href).toString();
-    return new URL("fixtures/snapshot.json", pageDirUrl).toString();
+    const url = new URL("fixtures/snapshot.json", pageDirUrl).toString();
+    if (debug) console.debug("[snapshot] strategy=page-dir (fallback)", url);
+    return url;
   };
 
   const snapshotUrl = await resolveSnapshotUrl();
