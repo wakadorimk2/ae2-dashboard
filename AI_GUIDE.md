@@ -1,30 +1,36 @@
 # AI_GUIDE.md
-This file defines how AI tools (e.g. OpenAI Codex) should interact with this repository.
-The goal is to reduce wasted exploration and keep changes aligned with the product philosophy.
+
+This file is the **shared constitution** for all AI tools working with this repository.
+Each AI tool has its own operating instructions file — read this first, then your tool-specific file.
+
+> Tool-specific instructions:
+> - Claude Code → `CLAUDE.md`
+> - GitHub Copilot → `.github/copilot-instructions.md`
+> - OpenAI Codex → `AI_CODEX.md`
 
 ---
 
-## 0. Purpose / Context
+## 0. Purpose & Scope
 
 This repository contains:
-- A dashboard UI for visualizing AE2-related data
+- A dashboard UI for visualizing AE2 (Applied Energistics 2) inventory data from Minecraft
 - Backend collectors and Cloud Run deployment
 - Very large static asset directories (icons, etc.)
 
 ⚠️ Naive full-repository scanning is expensive and counterproductive.
-AI tools must follow the rules below.
+All AI tools must follow the rules in this file and their respective tool-specific files.
 
 ---
 
-## 1. Product & UI Philosophy (Very Important)
+## 1. Product & UI Philosophy
 
 - **Mobile-first**
   - The smartphone view is the baseline.
   - PC views only add *supplementary* information or layout, not new meaning.
 
-- **Heatmap-first**
-  - The heatmap is the primary UI.
-  - It represents the “world state” at a glance.
+- **Primary display: Heatmap**
+  - The heatmap is one of the primary display components in the current implementation.
+  - It is not a fixed design principle — the UI may evolve.
 
 - **Separation of concerns**
   - Heatmap: overview / observation
@@ -37,9 +43,47 @@ AI tools must follow the rules below.
 
 ---
 
-## 2. Exploration Rules (Strict)
+## 2. Architecture Overview
 
-### 2.1 Forbidden directories
+> Source: `README.md`. Items not found in that source are marked TBD.
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Game client | CC:Tweaked (Lua) in Minecraft |
+| Backend | FastAPI (Python 3.12+) |
+| Frontend | Vite + TypeScript (SPA) |
+| Database | PostgreSQL |
+| Object storage | GCS (Google Cloud Storage) |
+| Hosting | Cloud Run |
+
+### Key Directories
+
+```
+ae2-dashboard/
+├── cc/                          Lua scripts (CC:Tweaked in Minecraft)
+├── collector/                   FastAPI backend
+│   └── app/ops_ui/ui-src/       Vite frontend source
+├── migrations/                  PostgreSQL schema SQL
+└── scripts/                     Shell scripts (env, Docker, deploy)
+```
+
+### Data Flow
+
+```
+CC:Tweaked (Lua) ──POST /ingest──► FastAPI ──► GCS (snapshots)
+                                           └──► PostgreSQL (inventory_*)
+
+Browser ──GET /dashboard/ui──► Vite SPA
+```
+
+---
+
+## 3. Forbidden Zones
+
+### 3.1 Forbidden Directories
+
 The following directories are **large or irrelevant** to logic analysis.
 Do NOT scan, enumerate, or open files inside them.
 
@@ -54,46 +98,27 @@ Do NOT scan, enumerate, or open files inside them.
 
 If information seems to be missing, ask instead of exploring these paths.
 
----
+### 3.2 Dangerous Operations
 
-### 2.2 How to explore correctly
-- Prefer **ripgrep-style searches** over directory traversal
-- Focus on:
-  - UI entry points
-  - Routing
-  - API fetch logic
-  - JSON keys actually referenced by the UI
-- Restrict attention to code files (`.ts`, `.tsx`, `.js`, `.jsx`, `.html`, `.css`, `.py`)
+AI tools must NOT perform the following operations independently.
+Stop and request explicit human confirmation before proceeding.
 
----
+**Category A — Strictly Forbidden (requires explicit human approval)**
 
-## 3. Modes of Operation
+- Any changes to `migrations/` (irreversible DB schema changes)
+- Running `make deploy` or any deploy-related script in `scripts/`
+- Modifying Cloud Run / GCP infrastructure configuration
+- Reading, writing, or referencing `.env` / secrets / credential files
+- `git push --force` or `git reset --hard` on any shared branch
+- Direct commits to `main`
 
-### 3.1 Research Mode (Default when unspecified)
+**Category B — Stop and confirm before proceeding**
 
-- ❌ No code changes
-- ❌ No file edits
-- ❌ No refactors
-- ✅ Read-only investigation
-- ✅ Summaries, design proposals, and risk identification
-
-Expected output:
-- Key files and their responsibilities
-- Current data flow (textual diagram is fine)
-- Minimal vs recommended change strategies
-- Unknowns and assumptions
-
----
-
-### 3.2 Implementation Mode
-
-Only enter this mode if explicitly stated.
-
-Rules:
-- Make **minimal, localized changes**
-- Prefer incremental diffs over large rewrites
-- Respect the UI philosophy described above
-- Avoid speculative abstractions
+- Deleting or overwriting files in GCS buckets
+- Direct SQL with `DROP` / `TRUNCATE` / bulk `DELETE`
+- Major version upgrades of packages
+- Deleting or renaming public API endpoints
+- Modifying `collector/requirements*.txt`
 
 ---
 
@@ -113,22 +138,30 @@ Example (conceptual):
 
 ---
 
-## 5. When in Doubt
+## 5. Security Rules
 
-- Do NOT guess silently
-- List questions or missing assumptions explicitly
-- Ask before performing expensive exploration
+- Never include secrets, API keys, tokens, or passwords in any output, commit, or suggestion
+- Never read or reference `.env` files or credential files
+- Do not log or print sensitive values, even in debug contexts
+- If a secret appears to be hardcoded in existing code, flag it as a risk — do not copy or propagate it
 
 ---
 
-## 6. Short Commands for Humans
+## 6. Commit & PR Conventions
 
-Humans may invoke modes using short phrases:
+- Commit messages: follow Conventional Commits format
+  - Prefixes: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`
+- Branch naming: `feat/<description>`, `fix/<description>`, `chore/<description>`
+- Direct commits to `main` are **prohibited** — all changes go through PRs
+- PRs must pass Copilot review and `make test` before merge (see `.github/pull_request_template.md`)
 
-- “調査モード。AI_GUIDE.mdに従ってください。”
-- “実装モード。AI_GUIDE.mdを前提に最小差分で。”
+---
 
-Follow them strictly.
+## 7. Changelog
+
+| Date | Change |
+|---|---|
+| 2026-02-25 | v2: Restructured as shared constitution. Moved tool-specific content to CLAUDE.md. Added Architecture Overview, Dangerous Operations, Security Rules, Commit/PR Conventions. Downgraded Heatmap from design principle to implementation note. |
 
 ---
 
